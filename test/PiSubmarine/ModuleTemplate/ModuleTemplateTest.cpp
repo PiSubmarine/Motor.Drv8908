@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "PiSubmarine/ModuleTemplate/ModuleTemplate.h"
+#include "PiSubmarine/Drv8908/ModuleTemplate.h"
 
 namespace PiSubmarine::ModuleTemplate
 {

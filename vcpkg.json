@@ -1,6 +1,13 @@
 {
   "dependencies": [
     "spdlog",
-    "gtest"
+    "gtest",
+    "ftxui",
+    {
+      "name": "libgpiod",
+      "default-features": false,
+      "features": [ "cxx-bindings" ]
+    },
+    "magic-enum"
   ]
 }

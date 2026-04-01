@@ -1,7 +1,7 @@
 #pragma once
 
 #include <gmock/gmock.h>
-#include "PiSubmarine/ModuleTemplate/IModuleTemplate.h"
+#include "PiSubmarine/Drv8908/IModuleTemplate.h"
 
 namespace PiSubmarine::ModuleTemplate
 {
