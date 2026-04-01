@@ -64,6 +64,7 @@ int main()
     PiSubmarine::Motor::Drv8908::Config motorConfig;
     motorConfig.DutyCycleChangeRate = PiSubmarine::Motor::DutyRate(1, 1s);
 
+    // Motor 1
     PiSubmarine::Motor::Unidirectional::Drv8908::Controller thrusterFrontRight(
         thrusterChip,
         thrusterChipPowerManager,
@@ -72,37 +73,60 @@ int main()
         PiSubmarine::Motor::Drv8908::BridgeSide::High,
         motorConfig);
 
+    // Motor 2
+    PiSubmarine::Motor::Unidirectional::Drv8908::Controller thrusterBackRight(
+        thrusterChip,
+        thrusterChipPowerManager,
+        PiSubmarine::Drv8908::PwmGenerator::PwmGenerator2,
+        PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7 | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+        PiSubmarine::Motor::Drv8908::BridgeSide::High,
+        motorConfig);
+
     auto screen = ScreenInteractive::TerminalOutput();
 
-    auto render = [&]
+    // Helper to render individual motor states cleanly
+    auto renderMotor = [](const std::string& name, PiSubmarine::Motor::Unidirectional::Drv8908::Controller& motor)
     {
-        auto operationalState = std::string(magic_enum::enum_name(thrusterFrontRight.GetOperationalState()));
-        auto faults = std::string(magic_enum::enum_name(thrusterFrontRight.GetFaults()));
-        auto warnings = std::string(magic_enum::enum_name(thrusterFrontRight.GetWarnings()));
+        auto operationalState = std::string(magic_enum::enum_name(motor.GetOperationalState()));
+        auto faults = std::string(magic_enum::enum_name(motor.GetFaults()));
+        auto warnings = std::string(magic_enum::enum_name(motor.GetWarnings()));
 
         return vbox({
-
-            text("PiSubmarine Motor Test") | bold | center,
-
+            text(name) | bold | center,
             separator(),
-
             text("State: " + operationalState),
             text("Faults: " + faults),
             text("Warnings: " + warnings),
+            separator(),
+            text("Duty (reported): " + std::to_string(motor.GetDutyCycle())),
+            text("Duty (actual):   " + std::to_string(motor.GetActualDutyCycle())),
+            text(std::string("Power (reported): ") + (motor.IsPowered() ? "ON" : "OFF")),
+            text(std::string("Power (actual):   ") + (motor.IsActuallyPowered() ? "ON" : "OFF")),
+        });
+    };
+
+    auto render = [&]
+    {
+        return vbox({
+            text("PiSubmarine Dual Motor Test") | bold | center,
 
             separator(),
 
-            text("Duty (reported): " + std::to_string(thrusterFrontRight.GetDutyCycle())),
-            text("Duty (actual):  " + std::to_string(thrusterFrontRight.GetActualDutyCycle())),
-            text(std::string("Power (reported): ") + (thrusterFrontRight.IsPowered() ? "ON" : "OFF")),
-            text(std::string("Power (actual): ") + (thrusterFrontRight.IsActuallyPowered() ? "ON" : "OFF")),
+            // Display the two motors side-by-side
+            hbox({
+                renderMotor("Front Right (Motor 1)", thrusterFrontRight) | flex,
+                separator(),
+                renderMotor("Back Right (Motor 2)", thrusterBackRight) | flex,
+            }),
 
             separator(),
 
             text("Controls:"),
-            text("  w / s  -> duty up/down"),
-            text("  p      -> power toggle"),
-            text("  q      -> quit")
+            text("  [w / s] -> Front Right duty up/down"),
+            text("  [p]     -> Front Right power toggle"),
+            text("  [i / k] -> Back Right duty up/down"),
+            text("  [o]     -> Back Right power toggle"),
+            text("  [q]     -> quit")
         }) | border;
     };
 
@@ -120,21 +144,37 @@ int main()
             return true;
         }
 
+        // --- Front Right Controls ---
         if (e == Event::Character('p'))
         {
             thrusterFrontRight.SetPowered(!thrusterFrontRight.IsPowered());
             return true;
         }
-
         if (e == Event::Character('w'))
         {
             IncreaseDuty(thrusterFrontRight);
             return true;
         }
-
         if (e == Event::Character('s'))
         {
             DecreaseDuty(thrusterFrontRight);
+            return true;
+        }
+
+        // --- Back Right Controls ---
+        if (e == Event::Character('o'))
+        {
+            thrusterBackRight.SetPowered(!thrusterBackRight.IsPowered());
+            return true;
+        }
+        if (e == Event::Character('i'))
+        {
+            IncreaseDuty(thrusterBackRight);
+            return true;
+        }
+        if (e == Event::Character('k'))
+        {
+            DecreaseDuty(thrusterBackRight);
             return true;
         }
 
@@ -142,6 +182,7 @@ int main()
     });
 
     // ---------------- Tick loop (single-threaded) ----------------
+    std::atomic<bool> isRunning{true};
     std::thread tick_thread([&]
     {
         using namespace std::chrono;
@@ -150,25 +191,30 @@ int main()
         auto nextFrameTarget = steady_clock::now() + tickInterval;
         auto lastFrameTime = steady_clock::now();
 
-        while (true)
+        while (isRunning)
         {
-            // 1. Calculate actual delta time since the start of the last frame
             auto now = steady_clock::now();
             auto actualDelta = duration_cast<milliseconds>(now - lastFrameTime);
             lastFrameTime = now;
 
-            // 2. Perform work with actual delta
+            // Tick both motors
             thrusterFrontRight.Tick(actualDelta);
+            thrusterBackRight.Tick(actualDelta);
+
             screen.PostEvent(Event::Custom);
 
-            // 3. Sleep until the absolute target time
             std::this_thread::sleep_until(nextFrameTarget);
-
-            // 4. Set the next target by incrementing the previous target
-            // (This maintains the 100Hz frequency even if one frame is slightly late)
             nextFrameTarget += tickInterval;
         }
     });
 
     screen.Loop(component);
+
+    // Ensure the background thread shuts down gracefully when we quit
+    isRunning = false;
+    if (tick_thread.joinable()) {
+        tick_thread.join();
+    }
+
+    return 0;
 }
