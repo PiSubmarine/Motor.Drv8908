@@ -84,8 +84,16 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
 
     void Controller::SetDutyCycle(NormalizedFraction dutyCycle)
     {
+        if (m_TargetDutyCycle == dutyCycle)
+        {
+            return;
+        }
+
+        auto oldDuty = m_TargetDutyCycle;
+
         m_TargetDutyCycle = dutyCycle;
-        if (m_TargetDutyCycle < m_MotorConfig.KickDuty && m_CurrentDutyCycle < m_TargetDutyCycle)
+
+        if (m_TargetDutyCycle < m_MotorConfig.KickDuty && oldDuty <= m_MotorConfig.MinimalDuty)
         {
             m_KickNeeded = true;
         }
@@ -224,7 +232,7 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
 
         status = m_Chip.SetEnabledOpenLoadDetect(m_HalfBridges);
         assert(IsValid(status));
-        status = m_Chip.SetOpenLoadDetectControl3(PiSubmarine::Drv8908::OcpDeglitchTime::MicroSeconds60, false);
+        status = m_Chip.SetOpenLoadDetectControl3(PiSubmarine::Drv8908::OcpDeglitchTime::MicroSeconds60, true);
         assert(IsValid(status));
         status = m_Chip.SetOpenLoadDetectControl2(
             PiSubmarine::Drv8908::OpenLoadDetectControl::OldRep | PiSubmarine::Drv8908::OpenLoadDetectControl::OldOp);
@@ -258,6 +266,8 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         assert(IsValid(status));
         status = m_Chip.SetPwmMap(m_HalfBridges, m_PwmGenerator);
         assert(IsValid(status));
+
+        m_KickNeeded = true;
     }
 
     void Controller::ReadStatus()
