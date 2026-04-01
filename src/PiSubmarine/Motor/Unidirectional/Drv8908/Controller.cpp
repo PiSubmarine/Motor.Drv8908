@@ -43,11 +43,11 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
     }
 
     Controller::Controller(PiSubmarine::Drv8908::IDevice& chip,
-                   PiSubmarine::Drv8908::IPowerManager& powerManager,
-                   PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
-                   PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
-                   Motor::Drv8908::BridgeSide bridgeSide,
-                   Motor::Drv8908::Config motorConfig) :
+                           PiSubmarine::Drv8908::IPowerManager& powerManager,
+                           PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
+                           PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
+                           Motor::Drv8908::BridgeSide bridgeSide,
+                           Motor::Drv8908::Config motorConfig) :
         m_Chip(chip),
         m_PowerManager(powerManager),
         m_PwmGenerator(pwmGenerator),
@@ -55,7 +55,6 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         m_BridgeSide(bridgeSide),
         m_MotorConfig(motorConfig)
     {
-
     }
 
     void Controller::SetPowered(bool enabled)
@@ -86,6 +85,10 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
     void Controller::SetDutyCycle(NormalizedFraction dutyCycle)
     {
         m_TargetDutyCycle = dutyCycle;
+        if (m_TargetDutyCycle < m_MotorConfig.KickDuty && m_CurrentDutyCycle < m_TargetDutyCycle)
+        {
+            m_KickNeeded = true;
+        }
     }
 
     NormalizedFraction Controller::GetMinimumEffectiveDutyCycle() const
@@ -117,36 +120,67 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         if (m_PowerLease.IsValid())
         {
             ReadStatus();
+            if (m_OperationalState == Telemetry::Api::OperationalState::Faulted)
+            {
+                return;
+            }
         }
-
-        if (m_OperationalState == Telemetry::Api::OperationalState::Faulted)
+        else
         {
             return;
         }
 
-        if (m_CurrentDutyCycle != m_TargetDutyCycle)
+        if (m_State == ControlState::Normal)
         {
-            double dutyDeltaCurrent = std::fabs(m_TargetDutyCycle - m_CurrentDutyCycle);
-            double dutyDeltaTick = m_MotorConfig.DutyCycleChangeRate * deltaTime;
-            if (std::fabs(dutyDeltaTick) > dutyDeltaCurrent)
+            auto transitionTarget = m_TargetDutyCycle;
+            if (m_TargetDutyCycle < m_MotorConfig.MinimalDuty)
             {
-                dutyDeltaTick = dutyDeltaCurrent;
+                transitionTarget = 0;
             }
+            TransitionDutyCycle(transitionTarget, m_MotorConfig.DutyCycleChangeRate, deltaTime);
 
-            if (m_CurrentDutyCycle < m_TargetDutyCycle)
+            if (m_TargetDutyCycle >= m_MotorConfig.MinimalDuty)
             {
-                m_CurrentDutyCycle = m_CurrentDutyCycle + dutyDeltaTick;
+                if (
+                    (m_TimeSinceKickTransition >= m_MotorConfig.KickInterval && m_MotorConfig.KickInterval.count() > 0)
+                    || m_KickNeeded)
+                {
+                    m_State = ControlState::KickRise;
+                    m_TimeSinceKickTransition = std::chrono::nanoseconds(0);
+                    m_KickNeeded = false;
+                }
             }
-            else if (m_CurrentDutyCycle > m_TargetDutyCycle)
-            {
-                m_CurrentDutyCycle = m_CurrentDutyCycle - dutyDeltaTick;
-            }
-
-            assert(m_PowerLease.IsValid()); // We can only change Duty Cycle if we have power.
-            NormalizedIntFraction<8> dutyCycle{static_cast<double>(m_CurrentDutyCycle)};
-            stat = m_Chip.SetDutyCycle(m_PwmGenerator, dutyCycle);
-            assert(PiSubmarine::Drv8908::IsValid(stat));
         }
+        else if (m_State == ControlState::KickRise)
+        {
+            TransitionDutyCycle(m_MotorConfig.KickDuty, m_MotorConfig.KickDutyCycleChangeRate, deltaTime);
+
+            if (m_TimeSinceKickTransition >= m_MotorConfig.KickDuration / 2)
+            {
+                m_State = ControlState::KickFall;
+                m_TimeSinceKickTransition = std::chrono::nanoseconds(0);
+            }
+        }
+        else if (m_State == ControlState::KickFall)
+        {
+            if (m_TargetDutyCycle >= m_MotorConfig.KickDuty)
+            {
+                m_State = ControlState::Normal;
+                m_TimeSinceKickTransition = std::chrono::nanoseconds(0);
+            }
+            else
+            {
+                TransitionDutyCycle(m_TargetDutyCycle, m_MotorConfig.KickDutyCycleChangeRate, deltaTime);
+
+                if (m_TimeSinceKickTransition >= m_MotorConfig.KickDuration / 2)
+                {
+                    m_State = ControlState::Normal;
+                    m_TimeSinceKickTransition = std::chrono::nanoseconds(0);
+                }
+            }
+        }
+
+        m_TimeSinceKickTransition += deltaTime;
     }
 
     Telemetry::Api::OperationalState Controller::GetOperationalState() const
@@ -253,5 +287,39 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         {
             m_OperationalState = Telemetry::Api::OperationalState::Operational;
         }
+    }
+
+    void Controller::TransitionDutyCycle(NormalizedFraction targetDutyCycle, DutyRate speed,
+                                         std::chrono::nanoseconds deltaTime)
+    {
+        if (m_CurrentDutyCycle != targetDutyCycle)
+        {
+            double dutyDeltaCurrent = std::fabs(targetDutyCycle - m_CurrentDutyCycle);
+            double dutyDeltaTick = speed * deltaTime;
+            if (std::fabs(dutyDeltaTick) > dutyDeltaCurrent)
+            {
+                dutyDeltaTick = dutyDeltaCurrent;
+            }
+
+            if (m_CurrentDutyCycle < targetDutyCycle)
+            {
+                m_CurrentDutyCycle = m_CurrentDutyCycle + dutyDeltaTick;
+            }
+            else if (m_CurrentDutyCycle > targetDutyCycle)
+            {
+                m_CurrentDutyCycle = m_CurrentDutyCycle - dutyDeltaTick;
+            }
+
+            SetDutyCycleInternal(m_CurrentDutyCycle);
+        }
+    }
+
+    void Controller::SetDutyCycleInternal(NormalizedFraction dutyCycle)
+    {
+        assert(m_PowerLease.IsValid()); // We can only change Duty Cycle if we have power.
+        m_CurrentDutyCycle = dutyCycle;
+        NormalizedIntFraction<8> dutyCycleInt{static_cast<double>(m_CurrentDutyCycle)};
+        auto stat = m_Chip.SetDutyCycle(m_PwmGenerator, dutyCycleInt);
+        assert(PiSubmarine::Drv8908::IsValid(stat));
     }
 }

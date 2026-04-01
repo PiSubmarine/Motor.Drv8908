@@ -17,6 +17,13 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
     class Controller : public Motor::Unidirectional::Api::IController, Telemetry::Api::IProvider, Time::ITickable
     {
     public:
+        enum class ControlState
+        {
+            Normal = 0,
+            KickRise,
+            KickFall
+        };
+
         Controller(
             PiSubmarine::Drv8908::IDevice& chip,
             PiSubmarine::Drv8908::IPowerManager& powerManager,
@@ -50,8 +57,10 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         Motor::Drv8908::BridgeSide m_BridgeSide;
         Motor::Drv8908::Config m_MotorConfig;
 
-
+        ControlState m_State = ControlState::Normal;
+        std::chrono::nanoseconds m_TimeSinceKickTransition;
         bool m_WantsBePowered = false;
+        bool m_KickNeeded = true;
         NormalizedFraction m_CurrentDutyCycle{0};
         NormalizedFraction m_TargetDutyCycle{0};
 
@@ -61,6 +70,7 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
 
         void PowerUp();
         void ReadStatus();
-
+        void TransitionDutyCycle(NormalizedFraction targetDutyCycle, DutyRate speed, std::chrono::nanoseconds deltaTime);
+        void SetDutyCycleInternal(NormalizedFraction dutyCycle);
     };
 }
