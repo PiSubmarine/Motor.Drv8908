@@ -41,7 +41,7 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         void SetDutyCycle(NormalizedFraction dutyCycle) override;
         NormalizedFraction GetMinimumEffectiveDutyCycle() const override;
 
-        void Tick(std::chrono::nanoseconds deltaTime) override;
+        void Tick(const std::chrono::nanoseconds& uptime, const std::chrono::nanoseconds& deltaTime) override;
 
         [[nodiscard]] Telemetry::Api::OperationalState GetOperationalState() const override;
         [[nodiscard]] Telemetry::Api::Faults GetFaults() const override;

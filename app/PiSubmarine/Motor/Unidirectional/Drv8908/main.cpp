@@ -190,16 +190,17 @@ int main()
         constexpr auto tickInterval = 10ms;
         auto nextFrameTarget = steady_clock::now() + tickInterval;
         auto lastFrameTime = steady_clock::now();
+        auto uptime = std::chrono::nanoseconds::zero();
 
         while (isRunning)
         {
             auto now = steady_clock::now();
             auto actualDelta = duration_cast<milliseconds>(now - lastFrameTime);
             lastFrameTime = now;
-
+            uptime += actualDelta;
             // Tick both motors
-            thrusterFrontRight.Tick(actualDelta);
-            thrusterBackRight.Tick(actualDelta);
+            thrusterFrontRight.Tick(uptime, actualDelta);
+            thrusterBackRight.Tick(uptime, actualDelta);
 
             screen.PostEvent(Event::Custom);
 

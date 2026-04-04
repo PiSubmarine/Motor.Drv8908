@@ -104,9 +104,9 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         return m_MotorConfig.MinimalDuty;
     }
 
-    void Controller::Tick(std::chrono::nanoseconds deltaTime)
+    void Controller::Tick(const std::chrono::nanoseconds& uptime, const std::chrono::nanoseconds& deltaTime)
     {
-        PiSubmarine::Drv8908::IcStatus stat;
+        (void)uptime;
 
         if (m_WantsBePowered == false)
         {
