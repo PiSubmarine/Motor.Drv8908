@@ -33,19 +33,19 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
             Motor::Drv8908::Config motorConfig
         );
 
-        void SetPowered(bool enabled) override;
-        [[nodiscard]] bool IsPowered() const override;
-        [[nodiscard]] NormalizedFraction GetDutyCycle() const override;
-        [[nodiscard]] NormalizedFraction GetActualDutyCycle() const;
+        Error::Api::Result<void> SetPowered(bool enabled) override;
+        [[nodiscard]] Error::Api::Result<bool> IsPowered() const override;
+        [[nodiscard]] Error::Api::Result<NormalizedFraction> GetDutyCycle() const override;
+        [[nodiscard]] Error::Api::Result<NormalizedFraction> GetActualDutyCycle() const;
         [[nodiscard]] bool IsActuallyPowered() const;
-        void SetDutyCycle(NormalizedFraction dutyCycle) override;
-        NormalizedFraction GetMinimumEffectiveDutyCycle() const override;
+        Error::Api::Result<void> SetDutyCycle(NormalizedFraction dutyCycle) override;
+        Error::Api::Result<NormalizedFraction> GetMinimumEffectiveDutyCycle() const override;
 
         void Tick(const std::chrono::nanoseconds& uptime, const std::chrono::nanoseconds& deltaTime) override;
 
-        [[nodiscard]] Telemetry::Api::OperationalState GetOperationalState() const override;
-        [[nodiscard]] Telemetry::Api::Faults GetFaults() const override;
-        [[nodiscard]] Telemetry::Api::Warnings GetWarnings() const override;
+        [[nodiscard]] Error::Api::Result<Telemetry::Api::OperationalState> GetOperationalState() const override;
+        [[nodiscard]] Error::Api::Result<Telemetry::Api::Faults> GetFaults() const override;
+        [[nodiscard]] Error::Api::Result<Telemetry::Api::Warnings> GetWarnings() const override;
 
     private:
         PiSubmarine::Drv8908::IDevice& m_Chip;

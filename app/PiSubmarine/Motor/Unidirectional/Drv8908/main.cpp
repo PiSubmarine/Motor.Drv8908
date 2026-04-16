@@ -29,13 +29,13 @@ struct magic_enum::customize::enum_range<PiSubmarine::Motor::Telemetry::Api::War
 
 void IncreaseDuty(PiSubmarine::Motor::Unidirectional::Api::IController& controller)
 {
-    double dutyCycle = std::min(1.0, controller.GetDutyCycle() + 0.05);
+    double dutyCycle = std::min(1.0, controller.GetDutyCycle().value() + 0.05);
     controller.SetDutyCycle(dutyCycle);
 }
 
 void DecreaseDuty(PiSubmarine::Motor::Unidirectional::Api::IController& controller)
 {
-    double dutyCycle = std::max(0.0, controller.GetDutyCycle() - 0.05);
+    double dutyCycle = std::max(0.0, controller.GetDutyCycle().value() - 0.05);
     controller.SetDutyCycle(dutyCycle);
 }
 
@@ -87,9 +87,9 @@ int main()
     // Helper to render individual motor states cleanly
     auto renderMotor = [](const std::string& name, PiSubmarine::Motor::Unidirectional::Drv8908::Controller& motor)
     {
-        auto operationalState = std::string(magic_enum::enum_name(motor.GetOperationalState()));
-        auto faults = std::string(magic_enum::enum_name(motor.GetFaults()));
-        auto warnings = std::string(magic_enum::enum_name(motor.GetWarnings()));
+        auto operationalState = std::string(magic_enum::enum_name(motor.GetOperationalState().value()));
+        auto faults = std::string(magic_enum::enum_name(motor.GetFaults().value()));
+        auto warnings = std::string(magic_enum::enum_name(motor.GetWarnings().value()));
 
         return vbox({
             text(name) | bold | center,
@@ -98,8 +98,8 @@ int main()
             text("Faults: " + faults),
             text("Warnings: " + warnings),
             separator(),
-            text("Duty (reported): " + std::to_string(motor.GetDutyCycle())),
-            text("Duty (actual):   " + std::to_string(motor.GetActualDutyCycle())),
+            text("Duty (reported): " + std::to_string(motor.GetDutyCycle().value())),
+            text("Duty (actual):   " + std::to_string(motor.GetActualDutyCycle().value())),
             text(std::string("Power (reported): ") + (motor.IsPowered() ? "ON" : "OFF")),
             text(std::string("Power (actual):   ") + (motor.IsActuallyPowered() ? "ON" : "OFF")),
         });

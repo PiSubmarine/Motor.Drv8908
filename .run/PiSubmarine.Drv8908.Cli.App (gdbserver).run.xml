@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="PiSubmarine.Drv8908.Cli.App (gdbserver)" type="com.jetbrains.cidr.remote.gdbserver.type" factoryName="com.jetbrains.cidr.remote.gdbserver.factory" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="PiSubmarine.Motor.Drv8908" TARGET_NAME="PiSubmarine.Motor.Drv8908" CONFIG_NAME="pisubmarine-wsl2-debug" version="1" RUN_TARGET_PROJECT_NAME="PiSubmarine.Motor.Drv8908" RUN_TARGET_NAME="PiSubmarine.Motor.Drv8908.App">
+    <custom-gdb-server version="1" gdb-connect="PiSubmarine:1234" executable="" warmup-ms="0" download-type="UPDATED_ONLY" sshConfigName="pisubmarine@PiSubmarine:22 password" uploadFile="/tmp/CLion/debug/PiSubmarine.Motor.Drv8908.App" defaultGdbServerArgs=":1234 /tmp/CLion/debug/PiSubmarine.Motor.Drv8908.App">
+      <debugger toolchainName="PiSubmarine WSL2" />
+    </custom-gdb-server>
+    <method v="2">
+      <option name="CLION.COMPOUND.BUILD" enabled="true" />
+    </method>
+  </configuration>
+</component>

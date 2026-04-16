@@ -57,22 +57,23 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
     {
     }
 
-    void Controller::SetPowered(bool enabled)
+    Error::Api::Result<void> Controller::SetPowered(bool enabled)
     {
         m_WantsBePowered = enabled;
+        return {};
     }
 
-    bool Controller::IsPowered() const
+    Error::Api::Result<bool> Controller::IsPowered() const
     {
         return m_WantsBePowered;
     }
 
-    NormalizedFraction Controller::GetDutyCycle() const
+    Error::Api::Result<NormalizedFraction> Controller::GetDutyCycle() const
     {
         return m_TargetDutyCycle;
     }
 
-    NormalizedFraction Controller::GetActualDutyCycle() const
+    Error::Api::Result<NormalizedFraction> Controller::GetActualDutyCycle() const
     {
         return m_CurrentDutyCycle;
     }
@@ -82,11 +83,11 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         return m_PowerLease.IsValid();
     }
 
-    void Controller::SetDutyCycle(NormalizedFraction dutyCycle)
+    Error::Api::Result<void> Controller::SetDutyCycle(NormalizedFraction dutyCycle)
     {
         if (m_TargetDutyCycle == dutyCycle)
         {
-            return;
+            return {};
         }
 
         auto oldDuty = m_TargetDutyCycle;
@@ -97,9 +98,10 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         {
             m_KickNeeded = true;
         }
+        return {};
     }
 
-    NormalizedFraction Controller::GetMinimumEffectiveDutyCycle() const
+    Error::Api::Result<NormalizedFraction> Controller::GetMinimumEffectiveDutyCycle() const
     {
         return m_MotorConfig.MinimalDuty;
     }
@@ -191,17 +193,17 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         m_TimeSinceKickTransition += deltaTime;
     }
 
-    Telemetry::Api::OperationalState Controller::GetOperationalState() const
+    Error::Api::Result<Telemetry::Api::OperationalState> Controller::GetOperationalState() const
     {
         return m_OperationalState;
     }
 
-    Telemetry::Api::Faults Controller::GetFaults() const
+    Error::Api::Result<Telemetry::Api::Faults> Controller::GetFaults() const
     {
         return m_Faults;
     }
 
-    Telemetry::Api::Warnings Controller::GetWarnings() const
+    Error::Api::Result<Telemetry::Api::Warnings> Controller::GetWarnings() const
     {
         return m_Warnings;
     }
