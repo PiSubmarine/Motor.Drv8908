@@ -43,9 +43,7 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
 
         void Tick(const std::chrono::nanoseconds& uptime, const std::chrono::nanoseconds& deltaTime) override;
 
-        [[nodiscard]] Error::Api::Result<Telemetry::Api::OperationalState> GetOperationalState() const override;
-        [[nodiscard]] Error::Api::Result<Telemetry::Api::Faults> GetFaults() const override;
-        [[nodiscard]] Error::Api::Result<Telemetry::Api::Warnings> GetWarnings() const override;
+        [[nodiscard]] Error::Api::Result<Telemetry::Api::State> GetState() const override;
 
     private:
         PiSubmarine::Drv8908::IDevice& m_Chip;

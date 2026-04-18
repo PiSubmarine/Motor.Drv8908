@@ -193,19 +193,12 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         m_TimeSinceKickTransition += deltaTime;
     }
 
-    Error::Api::Result<Telemetry::Api::OperationalState> Controller::GetOperationalState() const
+    Error::Api::Result<Telemetry::Api::State> Controller::GetState() const
     {
-        return m_OperationalState;
-    }
-
-    Error::Api::Result<Telemetry::Api::Faults> Controller::GetFaults() const
-    {
-        return m_Faults;
-    }
-
-    Error::Api::Result<Telemetry::Api::Warnings> Controller::GetWarnings() const
-    {
-        return m_Warnings;
+        return Telemetry::Api::State{
+            .Operational = m_OperationalState,
+            .ActiveFaults = m_Faults,
+            .ActiveWarnings = m_Warnings};
     }
 
     void Controller::PowerUp()

@@ -87,9 +87,10 @@ int main()
     // Helper to render individual motor states cleanly
     auto renderMotor = [](const std::string& name, PiSubmarine::Motor::Unidirectional::Drv8908::Controller& motor)
     {
-        auto operationalState = std::string(magic_enum::enum_name(motor.GetOperationalState().value()));
-        auto faults = std::string(magic_enum::enum_name(motor.GetFaults().value()));
-        auto warnings = std::string(magic_enum::enum_name(motor.GetWarnings().value()));
+        const auto telemetry = motor.GetState().value();
+        auto operationalState = std::string(magic_enum::enum_name(telemetry.Operational));
+        auto faults = std::string(magic_enum::enum_name(telemetry.ActiveFaults));
+        auto warnings = std::string(magic_enum::enum_name(telemetry.ActiveWarnings));
 
         return vbox({
             text(name) | bold | center,
