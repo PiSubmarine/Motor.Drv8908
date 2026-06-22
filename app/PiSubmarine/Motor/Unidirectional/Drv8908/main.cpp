@@ -91,6 +91,7 @@ int main()
         auto operationalState = std::string(magic_enum::enum_name(telemetry.Operational));
         auto faults = std::string(magic_enum::enum_name(telemetry.ActiveFaults));
         auto warnings = std::string(magic_enum::enum_name(telemetry.ActiveWarnings));
+        auto direction = std::string(magic_enum::enum_name(telemetry.Direction));
 
         return vbox({
             text(name) | bold | center,
@@ -98,6 +99,8 @@ int main()
             text("State: " + operationalState),
             text("Faults: " + faults),
             text("Warnings: " + warnings),
+            text("Direction: " + direction),
+            text("Drive effort: " + std::to_string(static_cast<double>(telemetry.DriveEffort))),
             separator(),
             text("Duty (reported): " + std::to_string(motor.GetDutyCycle().value())),
             text("Duty (actual):   " + std::to_string(motor.GetActualDutyCycle().value())),

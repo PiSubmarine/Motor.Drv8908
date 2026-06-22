@@ -195,10 +195,16 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
 
     Error::Api::Result<Telemetry::Api::State> Controller::GetState() const
     {
+        const auto direction = m_CurrentDutyCycle == NormalizedFraction{0}
+            ? Telemetry::Api::DriveDirection::Idle
+            : Telemetry::Api::DriveDirection::Forward;
+
         return Telemetry::Api::State{
             .Operational = m_OperationalState,
             .ActiveFaults = m_Faults,
-            .ActiveWarnings = m_Warnings};
+            .ActiveWarnings = m_Warnings,
+            .Direction = direction,
+            .DriveEffort = m_CurrentDutyCycle};
     }
 
     void Controller::PowerUp()
