@@ -2,7 +2,9 @@ include("${PISUBMARINE_BUILD_SYSTEM}")
 
 message("Adding library: ${PISUBMARINE_MODULE_NAME}")
 add_library(${PISUBMARINE_MODULE_NAME}
-        PiSubmarine/Motor/Unidirectional/Drv8908/Controller.cpp)
+        PiSubmarine/Motor/Drv8908/ControllerBase.cpp
+        PiSubmarine/Motor/Unidirectional/Drv8908/Controller.cpp
+        PiSubmarine/Motor/Bidirectional/Drv8908/Controller.cpp)
 
 target_include_directories(${PISUBMARINE_MODULE_NAME} PUBLIC "../public")
 PiSubmarineInitTarget(${PISUBMARINE_MODULE_NAME})

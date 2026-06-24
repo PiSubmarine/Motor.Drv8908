@@ -1,29 +1,22 @@
 #pragma once
 
+#include <stdexcept>
+
+#include "PiSubmarine/Drv8908/HalfBridgeBitMask.h"
 #include "PiSubmarine/Drv8908/IDevice.h"
 #include "PiSubmarine/Drv8908/IPowerManager.h"
 #include "PiSubmarine/Drv8908/PwmGenerator.h"
-#include "PiSubmarine/Drv8908/HalfBridgeBitMask.h"
-#include "PiSubmarine/Motor/Unidirectional/Api/IController.h"
 #include "PiSubmarine/Motor/Drv8908/BridgeSide.h"
-#include "PiSubmarine/Time/ITickable.h"
-#include "PiSubmarine/Motor/DutyRate.h"
-#include "PiSubmarine/Motor/Telemetry/Api/IProvider.h"
-#include "PiSubmarine/Motor/Unidirectional/Drv8908/Config.h"
+#include "PiSubmarine/Motor/Drv8908/Config.h"
+#include "PiSubmarine/Motor/Drv8908/ControllerBase.h"
+#include "PiSubmarine/Motor/Unidirectional/Api/IController.h"
 
 
 namespace PiSubmarine::Motor::Unidirectional::Drv8908
 {
-    class Controller : public Motor::Unidirectional::Api::IController, Telemetry::Api::IProvider, Time::ITickable
+    class Controller : public Motor::Unidirectional::Api::IController, public Motor::Drv8908::ControllerBase
     {
     public:
-        enum class ControlState
-        {
-            Normal = 0,
-            KickRise,
-            KickFall
-        };
-
         Controller(
             PiSubmarine::Drv8908::IDevice& chip,
             PiSubmarine::Drv8908::IPowerManager& powerManager,
@@ -36,39 +29,14 @@ namespace PiSubmarine::Motor::Unidirectional::Drv8908
         Error::Api::Result<void> SetPowered(bool enabled) override;
         [[nodiscard]] Error::Api::Result<bool> IsPowered() const override;
         [[nodiscard]] Error::Api::Result<NormalizedFraction> GetDutyCycle() const override;
-        [[nodiscard]] Error::Api::Result<NormalizedFraction> GetActualDutyCycle() const;
-        [[nodiscard]] bool IsActuallyPowered() const;
+        [[nodiscard]] Error::Api::Result<NormalizedFraction> GetActualDutyCycle() const override;
+        [[nodiscard]] bool IsActuallyPowered() const override;
         Error::Api::Result<void> SetDutyCycle(NormalizedFraction dutyCycle) override;
         Error::Api::Result<NormalizedFraction> GetMinimumEffectiveDutyCycle() const override;
-
         void Tick(const std::chrono::nanoseconds& uptime, const std::chrono::nanoseconds& deltaTime) override;
-
         [[nodiscard]] Error::Api::Result<Telemetry::Api::State> GetState() const override;
 
     private:
-        PiSubmarine::Drv8908::IDevice& m_Chip;
-        PiSubmarine::Drv8908::IPowerManager& m_PowerManager;
-        PiSubmarine::Drv8908::PowerLease m_PowerLease;
-
-        PiSubmarine::Drv8908::PwmGenerator m_PwmGenerator;
-        PiSubmarine::Drv8908::HalfBridgeBitMask m_HalfBridges;
-        Motor::Drv8908::BridgeSide m_BridgeSide;
-        Motor::Drv8908::Config m_MotorConfig;
-
-        ControlState m_State = ControlState::Normal;
-        std::chrono::nanoseconds m_TimeSinceKickTransition;
-        bool m_WantsBePowered = false;
-        bool m_KickNeeded = true;
-        NormalizedFraction m_CurrentDutyCycle{0};
         NormalizedFraction m_TargetDutyCycle{0};
-
-        Telemetry::Api::OperationalState m_OperationalState{Telemetry::Api::OperationalState::Operational};
-        Telemetry::Api::Faults m_Faults{0};
-        Telemetry::Api::Warnings m_Warnings{0};
-
-        void PowerUp();
-        void ReadStatus();
-        void TransitionDutyCycle(NormalizedFraction targetDutyCycle, DutyRate speed, std::chrono::nanoseconds deltaTime);
-        void SetDutyCycleInternal(NormalizedFraction dutyCycle);
     };
 }

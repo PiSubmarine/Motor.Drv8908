@@ -5,7 +5,7 @@ include(FetchContent)
 project(${PISUBMARINE_MODULE_NAME}.Test LANGUAGES CXX)
 
 set(${PISUBMARINE_MODULE_NAME}.Test.Sources
-        "PiSubmarine/ModuleTemplate/ModuleTemplateTest.cpp")
+        "PiSubmarine/Motor/Drv8908/ControllerTest.cpp")
 
 enable_testing()
 
@@ -16,6 +16,7 @@ add_executable(${PISUBMARINE_MODULE_NAME}.Test ${${PISUBMARINE_MODULE_NAME}.Test
 PiSubmarineInitTarget(${PISUBMARINE_MODULE_NAME}.Test)
 
 target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE ${PISUBMARINE_MODULE_NAME})
+target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE PiSubmarine.Drv8908.Mock)
 target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE spdlog::spdlog)
 target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE GTest::gtest_main)
 include(GoogleTest)
