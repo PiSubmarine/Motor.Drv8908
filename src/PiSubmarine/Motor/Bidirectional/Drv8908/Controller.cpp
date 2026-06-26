@@ -9,6 +9,16 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
         PiSubmarine::Drv8908::IPowerManager& powerManager,
         PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
         PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
+        const Motor::Drv8908::BridgeSide forwardBridgeSide) :
+        Controller(chip, powerManager, pwmGenerator, halfBridgeMask, forwardBridgeSide, Motor::Drv8908::Config{})
+    {
+    }
+
+    Controller::Controller(
+        PiSubmarine::Drv8908::IDevice& chip,
+        PiSubmarine::Drv8908::IPowerManager& powerManager,
+        PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
+        PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
         const Motor::Drv8908::BridgeSide forwardBridgeSide,
         const Motor::Drv8908::Config motorConfig) :
         ControllerBase(chip, powerManager, pwmGenerator, halfBridgeMask, forwardBridgeSide, motorConfig),

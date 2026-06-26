@@ -21,8 +21,15 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
             PiSubmarine::Drv8908::IPowerManager& powerManager,
             PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
             PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
+            Motor::Drv8908::BridgeSide forwardBridgeSide);
+
+        Controller(
+            PiSubmarine::Drv8908::IDevice& chip,
+            PiSubmarine::Drv8908::IPowerManager& powerManager,
+            PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
+            PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
             Motor::Drv8908::BridgeSide forwardBridgeSide,
-            Motor::Drv8908::Config motorConfig = {});
+            Motor::Drv8908::Config motorConfig);
 
         Error::Api::Result<void> SetPowered(bool enabled) override;
         [[nodiscard]] Error::Api::Result<bool> IsPowered() const override;
