@@ -55,11 +55,29 @@ namespace PiSubmarine::Motor::Drv8908
         PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
         BridgeSide initialBridgeSide,
         Config motorConfig) :
+        ControllerBase(
+            chip,
+            powerManager,
+            pwmGenerator,
+            initialBridgeSide == BridgeSide::High ? halfBridgeMask : PiSubmarine::Drv8908::HalfBridgeBitMask{0},
+            initialBridgeSide == BridgeSide::Low ? halfBridgeMask : PiSubmarine::Drv8908::HalfBridgeBitMask{0},
+            motorConfig)
+    {
+    }
+
+    ControllerBase::ControllerBase(
+        PiSubmarine::Drv8908::IDevice& chip,
+        PiSubmarine::Drv8908::IPowerManager& powerManager,
+        PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
+        PiSubmarine::Drv8908::HalfBridgeBitMask initialHighSideHalfBridgeMask,
+        PiSubmarine::Drv8908::HalfBridgeBitMask initialLowSideHalfBridgeMask,
+        Config motorConfig) :
         m_Chip(chip),
         m_PowerManager(powerManager),
         m_PwmGenerator(pwmGenerator),
-        m_HalfBridges(halfBridgeMask),
-        m_BridgeSide(initialBridgeSide),
+        m_HalfBridges(initialHighSideHalfBridgeMask | initialLowSideHalfBridgeMask),
+        m_HighSideHalfBridges(initialHighSideHalfBridgeMask),
+        m_LowSideHalfBridges(initialLowSideHalfBridgeMask),
         m_MotorConfig(motorConfig)
     {
     }
@@ -205,17 +223,24 @@ namespace PiSubmarine::Motor::Drv8908
 
     void ControllerBase::SetBridgeSide(const BridgeSide bridgeSide)
     {
-        m_BridgeSide = bridgeSide;
+        SetHalfBridgeStates(
+            bridgeSide == BridgeSide::High ? m_HalfBridges : PiSubmarine::Drv8908::HalfBridgeBitMask{0},
+            bridgeSide == BridgeSide::Low ? m_HalfBridges : PiSubmarine::Drv8908::HalfBridgeBitMask{0});
+    }
+
+    void ControllerBase::SetHalfBridgeStates(
+        const PiSubmarine::Drv8908::HalfBridgeBitMask highSideHalfBridgeMask,
+        const PiSubmarine::Drv8908::HalfBridgeBitMask lowSideHalfBridgeMask)
+    {
+        m_HighSideHalfBridges = highSideHalfBridgeMask;
+        m_LowSideHalfBridges = lowSideHalfBridgeMask;
 
         if (!m_PowerLease.IsValid())
         {
             return;
         }
 
-        const bool highSide = bridgeSide == BridgeSide::High;
-        const bool lowSide = bridgeSide == BridgeSide::Low;
-        const auto status = m_Chip.SetHalfBridgeEnabled(m_HalfBridges, highSide, lowSide);
-        assert(PiSubmarine::Drv8908::IsValid(status));
+        ApplyHalfBridgeStates();
     }
 
     Error::Api::Result<Telemetry::Api::State> ControllerBase::GetStateForDirection(
@@ -280,7 +305,7 @@ namespace PiSubmarine::Motor::Drv8908
         status = m_Chip.SetHalfBridgePwmModes(pwmHalfBridges);
         assert(IsValid(status));
 
-        SetBridgeSide(m_BridgeSide);
+        ApplyHalfBridgeStates();
 
         status = m_Chip.SetPwmMap(m_HalfBridges, m_PwmGenerator);
         assert(IsValid(status));
@@ -351,5 +376,32 @@ namespace PiSubmarine::Motor::Drv8908
         const NormalizedIntFraction<8> dutyCycleInt{static_cast<double>(m_CurrentDutyCycle)};
         const auto stat = m_Chip.SetDutyCycle(m_PwmGenerator, dutyCycleInt);
         assert(PiSubmarine::Drv8908::IsValid(stat));
+    }
+
+    void ControllerBase::ApplyHalfBridgeStates() const
+    {
+        using namespace RegUtils;
+
+        const auto activeHalfBridges = m_HighSideHalfBridges | m_LowSideHalfBridges;
+        const auto inactiveHalfBridges = static_cast<PiSubmarine::Drv8908::HalfBridgeBitMask>(
+            ToInt(m_HalfBridges) & ~ToInt(activeHalfBridges));
+
+        if (m_HighSideHalfBridges != PiSubmarine::Drv8908::HalfBridgeBitMask{0})
+        {
+            const auto status = m_Chip.SetHalfBridgeEnabled(m_HighSideHalfBridges, true, false);
+            assert(PiSubmarine::Drv8908::IsValid(status));
+        }
+
+        if (m_LowSideHalfBridges != PiSubmarine::Drv8908::HalfBridgeBitMask{0})
+        {
+            const auto status = m_Chip.SetHalfBridgeEnabled(m_LowSideHalfBridges, false, true);
+            assert(PiSubmarine::Drv8908::IsValid(status));
+        }
+
+        if (inactiveHalfBridges != PiSubmarine::Drv8908::HalfBridgeBitMask{0})
+        {
+            const auto status = m_Chip.SetHalfBridgeEnabled(inactiveHalfBridges, false, false);
+            assert(PiSubmarine::Drv8908::IsValid(status));
+        }
     }
 }

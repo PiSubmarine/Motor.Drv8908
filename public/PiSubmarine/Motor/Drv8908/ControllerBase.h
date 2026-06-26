@@ -32,6 +32,14 @@ namespace PiSubmarine::Motor::Drv8908
             BridgeSide initialBridgeSide,
             Config motorConfig);
 
+        ControllerBase(
+            PiSubmarine::Drv8908::IDevice& chip,
+            PiSubmarine::Drv8908::IPowerManager& powerManager,
+            PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
+            PiSubmarine::Drv8908::HalfBridgeBitMask initialHighSideHalfBridgeMask,
+            PiSubmarine::Drv8908::HalfBridgeBitMask initialLowSideHalfBridgeMask,
+            Config motorConfig);
+
         [[nodiscard]] virtual Error::Api::Result<void> SetPowered(bool enabled);
         [[nodiscard]] virtual Error::Api::Result<bool> IsPowered() const;
         [[nodiscard]] virtual Error::Api::Result<NormalizedFraction> GetActualDutyCycle() const;
@@ -45,6 +53,9 @@ namespace PiSubmarine::Motor::Drv8908
         [[nodiscard]] bool BeginTick();
         void TickDriveEffort(NormalizedFraction targetDutyCycle, const std::chrono::nanoseconds& deltaTime);
         void SetBridgeSide(BridgeSide bridgeSide);
+        void SetHalfBridgeStates(
+            PiSubmarine::Drv8908::HalfBridgeBitMask highSideHalfBridgeMask,
+            PiSubmarine::Drv8908::HalfBridgeBitMask lowSideHalfBridgeMask);
         [[nodiscard]] Error::Api::Result<Telemetry::Api::State> GetStateForDirection(
             Telemetry::Api::DriveDirection direction) const;
         void RequestKick();
@@ -56,7 +67,8 @@ namespace PiSubmarine::Motor::Drv8908
 
         PiSubmarine::Drv8908::PwmGenerator m_PwmGenerator;
         PiSubmarine::Drv8908::HalfBridgeBitMask m_HalfBridges;
-        BridgeSide m_BridgeSide;
+        PiSubmarine::Drv8908::HalfBridgeBitMask m_HighSideHalfBridges;
+        PiSubmarine::Drv8908::HalfBridgeBitMask m_LowSideHalfBridges;
         Config m_MotorConfig;
 
         ControlState m_State = ControlState::Normal;
@@ -76,5 +88,6 @@ namespace PiSubmarine::Motor::Drv8908
             DutyRate speed,
             std::chrono::nanoseconds deltaTime);
         void SetDutyCycleInternal(NormalizedFraction dutyCycle);
+        void ApplyHalfBridgeStates() const;
     };
 }

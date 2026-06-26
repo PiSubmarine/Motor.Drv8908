@@ -8,9 +8,15 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
         PiSubmarine::Drv8908::IDevice& chip,
         PiSubmarine::Drv8908::IPowerManager& powerManager,
         PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
-        PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
-        const Motor::Drv8908::BridgeSide forwardBridgeSide) :
-        Controller(chip, powerManager, pwmGenerator, halfBridgeMask, forwardBridgeSide, Motor::Drv8908::Config{})
+        PiSubmarine::Drv8908::HalfBridgeBitMask forwardHighSideHalfBridgeMask,
+        PiSubmarine::Drv8908::HalfBridgeBitMask forwardLowSideHalfBridgeMask) :
+        Controller(
+            chip,
+            powerManager,
+            pwmGenerator,
+            forwardHighSideHalfBridgeMask,
+            forwardLowSideHalfBridgeMask,
+            Motor::Drv8908::Config{})
     {
     }
 
@@ -18,11 +24,18 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
         PiSubmarine::Drv8908::IDevice& chip,
         PiSubmarine::Drv8908::IPowerManager& powerManager,
         PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
-        PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
-        const Motor::Drv8908::BridgeSide forwardBridgeSide,
+        PiSubmarine::Drv8908::HalfBridgeBitMask forwardHighSideHalfBridgeMask,
+        PiSubmarine::Drv8908::HalfBridgeBitMask forwardLowSideHalfBridgeMask,
         const Motor::Drv8908::Config motorConfig) :
-        ControllerBase(chip, powerManager, pwmGenerator, halfBridgeMask, forwardBridgeSide, motorConfig),
-        m_ForwardBridgeSide(forwardBridgeSide)
+        ControllerBase(
+            chip,
+            powerManager,
+            pwmGenerator,
+            forwardHighSideHalfBridgeMask,
+            forwardLowSideHalfBridgeMask,
+            motorConfig),
+        m_ForwardHighSideHalfBridges(forwardHighSideHalfBridgeMask),
+        m_ForwardLowSideHalfBridges(forwardLowSideHalfBridgeMask)
     {
     }
 
@@ -146,22 +159,15 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
         return Telemetry::Api::DriveDirection::Idle;
     }
 
-    Motor::Drv8908::BridgeSide Controller::ReverseBridgeSide(const Motor::Drv8908::BridgeSide bridgeSide)
-    {
-        return bridgeSide == Motor::Drv8908::BridgeSide::High
-            ? Motor::Drv8908::BridgeSide::Low
-            : Motor::Drv8908::BridgeSide::High;
-    }
-
     void Controller::ApplyDirection(const Telemetry::Api::DriveDirection direction)
     {
         if (direction == Telemetry::Api::DriveDirection::Forward)
         {
-            SetBridgeSide(m_ForwardBridgeSide);
+            SetHalfBridgeStates(m_ForwardHighSideHalfBridges, m_ForwardLowSideHalfBridges);
         }
         else if (direction == Telemetry::Api::DriveDirection::Reverse)
         {
-            SetBridgeSide(ReverseBridgeSide(m_ForwardBridgeSide));
+            SetHalfBridgeStates(m_ForwardLowSideHalfBridges, m_ForwardHighSideHalfBridges);
         }
 
         m_CurrentDirection = direction;

@@ -20,15 +20,15 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
             PiSubmarine::Drv8908::IDevice& chip,
             PiSubmarine::Drv8908::IPowerManager& powerManager,
             PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
-            PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
-            Motor::Drv8908::BridgeSide forwardBridgeSide);
+            PiSubmarine::Drv8908::HalfBridgeBitMask forwardHighSideHalfBridgeMask,
+            PiSubmarine::Drv8908::HalfBridgeBitMask forwardLowSideHalfBridgeMask);
 
         Controller(
             PiSubmarine::Drv8908::IDevice& chip,
             PiSubmarine::Drv8908::IPowerManager& powerManager,
             PiSubmarine::Drv8908::PwmGenerator pwmGenerator,
-            PiSubmarine::Drv8908::HalfBridgeBitMask halfBridgeMask,
-            Motor::Drv8908::BridgeSide forwardBridgeSide,
+            PiSubmarine::Drv8908::HalfBridgeBitMask forwardHighSideHalfBridgeMask,
+            PiSubmarine::Drv8908::HalfBridgeBitMask forwardLowSideHalfBridgeMask,
             Motor::Drv8908::Config motorConfig);
 
         Error::Api::Result<void> SetPowered(bool enabled) override;
@@ -43,13 +43,13 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
         [[nodiscard]] Error::Api::Result<Telemetry::Api::State> GetState() const override;
 
     private:
-        Motor::Drv8908::BridgeSide m_ForwardBridgeSide;
+        PiSubmarine::Drv8908::HalfBridgeBitMask m_ForwardHighSideHalfBridges;
+        PiSubmarine::Drv8908::HalfBridgeBitMask m_ForwardLowSideHalfBridges;
         SignedNormalizedFraction m_TargetDutyCycle{0};
         Telemetry::Api::DriveDirection m_CurrentDirection{Telemetry::Api::DriveDirection::Idle};
 
         [[nodiscard]] static NormalizedFraction GetMagnitude(SignedNormalizedFraction dutyCycle);
         [[nodiscard]] static Telemetry::Api::DriveDirection GetDirection(SignedNormalizedFraction dutyCycle);
-        [[nodiscard]] static Motor::Drv8908::BridgeSide ReverseBridgeSide(Motor::Drv8908::BridgeSide bridgeSide);
         void ApplyDirection(Telemetry::Api::DriveDirection direction);
     };
 }

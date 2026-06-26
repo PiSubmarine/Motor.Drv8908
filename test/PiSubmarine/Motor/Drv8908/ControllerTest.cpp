@@ -164,7 +164,7 @@ namespace PiSubmarine::Motor::Drv8908
         EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
     }
 
-    TEST(BidirectionalControllerTest, UsesConfiguredBridgeSideForForwardAndOppositeForReverse)
+    TEST(BidirectionalControllerTest, UsesConfiguredHalfBridgeMasksForForwardAndReverse)
     {
         using namespace std::chrono_literals;
 
@@ -176,8 +176,8 @@ namespace PiSubmarine::Motor::Drv8908
             chip,
             powerManager,
             PiSubmarine::Drv8908::PwmGenerator::PwmGenerator4,
-            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7 | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
-            Motor::Drv8908::BridgeSide::High,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
             Motor::Drv8908::Config{
                 .DutyCycleChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
@@ -192,10 +192,16 @@ namespace PiSubmarine::Motor::Drv8908
         EXPECT_CALL(
             chip,
             SetHalfBridgeEnabled(
-                PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7
-                    | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+                PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
                 true,
                 false))
+            .Times(testing::AtLeast(1));
+        EXPECT_CALL(
+            chip,
+            SetHalfBridgeEnabled(
+                PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+                false,
+                true))
             .Times(testing::AtLeast(1));
         EXPECT_CALL(chip, SetDutyCycle(PiSubmarine::Drv8908::PwmGenerator::PwmGenerator4, testing::_))
             .Times(testing::AtLeast(1));
@@ -206,9 +212,13 @@ namespace PiSubmarine::Motor::Drv8908
 
         EXPECT_CALL(chip, SetHalfBridgeEnabled(
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7
-                | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+            ,
             false,
             true));
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+            true,
+            false));
 
         controller.Tick(10ms, 10ms);
         controller.Tick(20ms, 10ms);
@@ -226,8 +236,8 @@ namespace PiSubmarine::Motor::Drv8908
             chip,
             powerManager,
             PiSubmarine::Drv8908::PwmGenerator::PwmGenerator5,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge6,
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge5,
-            Motor::Drv8908::BridgeSide::Low,
             Motor::Drv8908::Config{
                 .DutyCycleChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
