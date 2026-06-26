@@ -211,8 +211,7 @@ namespace PiSubmarine::Motor::Drv8908
         ASSERT_TRUE(controller.SetDutyCycle(SignedNormalizedFraction{-0.3}).has_value());
 
         EXPECT_CALL(chip, SetHalfBridgeEnabled(
-            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7
-            ,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
             false,
             true));
         EXPECT_CALL(chip, SetHalfBridgeEnabled(

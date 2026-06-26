@@ -75,7 +75,8 @@ namespace PiSubmarine::Motor::Drv8908
         m_Chip(chip),
         m_PowerManager(powerManager),
         m_PwmGenerator(pwmGenerator),
-        m_HalfBridges(initialHighSideHalfBridgeMask | initialLowSideHalfBridgeMask),
+        m_HalfBridges(static_cast<PiSubmarine::Drv8908::HalfBridgeBitMask>(
+            RegUtils::ToInt(initialHighSideHalfBridgeMask) | RegUtils::ToInt(initialLowSideHalfBridgeMask))),
         m_HighSideHalfBridges(initialHighSideHalfBridgeMask),
         m_LowSideHalfBridges(initialLowSideHalfBridgeMask),
         m_MotorConfig(motorConfig)
