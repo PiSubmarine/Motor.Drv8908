@@ -311,6 +311,9 @@ namespace PiSubmarine::Motor::Drv8908
         status = m_Chip.SetPwmMap(m_HalfBridges, m_PwmGenerator);
         assert(IsValid(status));
 
+        status = m_Chip.SetHalfBridgeActiveFreeWheeling(m_HalfBridges);
+        assert(IsValid(status));
+
         m_KickNeeded = true;
     }
 

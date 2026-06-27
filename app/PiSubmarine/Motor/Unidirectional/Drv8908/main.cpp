@@ -50,8 +50,8 @@ int main()
     constexpr size_t LampsAndBallastNSleepPin = 16;
     constexpr size_t LampsAndBallastNFaultPin = 20;
 
-    PiSubmarine::SPI::Linux::Driver thrustersSpiDriver("/dev/spidev0.0", 5000000, 8, SPI_MODE_1, SPI_MODE_1);
-    PiSubmarine::SPI::Linux::Driver lampsAndBallastSpiDriver("/dev/spidev0.1", 5000000, 8,SPI_MODE_1, SPI_MODE_1);
+    PiSubmarine::SPI::Linux::Driver thrustersSpiDriver("/dev/spidev0.0", 1000000, 8, SPI_MODE_1, SPI_MODE_1);
+    PiSubmarine::SPI::Linux::Driver lampsAndBallastSpiDriver("/dev/spidev0.1", 1000000, 8,SPI_MODE_1, SPI_MODE_1);
     PiSubmarine::GPIO::Linux::Driver gpioDriver("PiSubmarine");
     auto thrustersPinGroup = gpioDriver.CreatePinGroup("Thrusters", "/dev/gpiochip0",
                                                        {ThrustersNSleepPin, ThrustersNFaultPin});
