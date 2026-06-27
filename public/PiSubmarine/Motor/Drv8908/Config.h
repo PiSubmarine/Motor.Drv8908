@@ -7,7 +7,7 @@ namespace PiSubmarine::Motor::Drv8908
 {
     struct Config
     {
-        DutyRate DutyCycleChangeRate{1, std::chrono::milliseconds(100)};
+        DutyRate DutyCycleChangeRate{1, std::chrono::milliseconds(500)};
         NormalizedFraction MinimalDuty{0.20};
         std::chrono::milliseconds KickDuration{250};
         std::chrono::milliseconds KickInterval{0};
