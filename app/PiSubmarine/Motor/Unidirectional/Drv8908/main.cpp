@@ -62,7 +62,8 @@ int main()
     PiSubmarine::Drv8908::PowerManager thrusterChipPowerManager(thrusterChip);
 
     PiSubmarine::Motor::Drv8908::Config motorConfig;
-    motorConfig.DutyCycleChangeRate = PiSubmarine::Motor::DutyRate(1, 1s);
+    motorConfig.DutyCycleIncreaseChangeRate = PiSubmarine::Motor::DutyRate(1, 1s);
+    motorConfig.DutyCycleDecreaseChangeRate = PiSubmarine::Motor::DutyRate(1, 1s);
 
     // Motor 1
     PiSubmarine::Motor::Unidirectional::Drv8908::Controller thrusterFrontRight(

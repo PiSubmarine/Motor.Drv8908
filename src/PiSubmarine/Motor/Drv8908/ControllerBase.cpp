@@ -214,7 +214,10 @@ namespace PiSubmarine::Motor::Drv8908
             {
                 transitionTarget = 0;
             }
-            if (!TransitionDutyCycle(transitionTarget, m_MotorConfig.DutyCycleChangeRate, deltaTime).has_value())
+            const auto transitionRate = transitionTarget >= m_CurrentDutyCycle
+                ? m_MotorConfig.DutyCycleIncreaseChangeRate
+                : m_MotorConfig.DutyCycleDecreaseChangeRate;
+            if (!TransitionDutyCycle(transitionTarget, transitionRate, deltaTime).has_value())
             {
                 return;
             }
@@ -445,6 +448,11 @@ namespace PiSubmarine::Motor::Drv8908
     {
         if (m_CurrentDutyCycle != targetDutyCycle)
         {
+            if (speed.DutyPerSecond <= 0.0)
+            {
+                return SetDutyCycleInternal(targetDutyCycle);
+            }
+
             double dutyDeltaCurrent = std::fabs(targetDutyCycle - m_CurrentDutyCycle);
             double dutyDeltaTick = speed * deltaTime;
             if (std::fabs(dutyDeltaTick) > dutyDeltaCurrent)

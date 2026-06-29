@@ -109,7 +109,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge1 | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge2,
             Motor::Drv8908::BridgeSide::High,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
@@ -143,7 +144,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
             Motor::Drv8908::BridgeSide::Low,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
@@ -163,6 +165,38 @@ namespace PiSubmarine::Motor::Drv8908
         EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
     }
 
+    TEST(UnidirectionalControllerTest, UsesInstantDecreaseByDefault)
+    {
+        using namespace std::chrono_literals;
+
+        testing::NiceMock<PiSubmarine::Drv8908::IDeviceMock> chip;
+        TestPowerManager powerManager;
+        PrepareSuccessfulConfigurationDefaults(chip);
+
+        Unidirectional::Drv8908::Controller controller(
+            chip,
+            powerManager,
+            PiSubmarine::Drv8908::PwmGenerator::PwmGenerator2,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
+            Motor::Drv8908::BridgeSide::Low,
+            Motor::Drv8908::Config{
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .MinimalDuty = NormalizedFraction{0.20},
+                .KickDuration = 0ms,
+                .KickInterval = 0ms,
+                .KickDuty = NormalizedFraction{0.50},
+                .KickDutyCycleChangeRate = DutyRate{1, 1ms}});
+
+        ASSERT_TRUE(controller.SetPowered(true).has_value());
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.4}).has_value());
+        controller.Tick(0ns, 10ms);
+
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.0}).has_value());
+        controller.Tick(10ms, 1ms);
+
+        EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
+    }
+
     TEST(UnidirectionalControllerTest, CoastsBelowMinimalDutyUntilDriveThresholdIsReached)
     {
         using namespace std::chrono_literals;
@@ -178,7 +212,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
             Motor::Drv8908::BridgeSide::Low,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
@@ -233,7 +268,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
@@ -292,7 +328,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge6,
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge5,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
@@ -325,7 +362,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
@@ -407,7 +445,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge1,
             Motor::Drv8908::BridgeSide::High,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
@@ -474,7 +513,8 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge2,
             Motor::Drv8908::BridgeSide::High,
             Motor::Drv8908::Config{
-                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
                 .MinimalDuty = NormalizedFraction{0.20},
                 .KickDuration = 0ms,
                 .KickInterval = 0ms,
