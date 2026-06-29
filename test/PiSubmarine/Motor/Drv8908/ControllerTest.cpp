@@ -163,6 +163,61 @@ namespace PiSubmarine::Motor::Drv8908
         EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
     }
 
+    TEST(UnidirectionalControllerTest, CoastsBelowMinimalDutyUntilDriveThresholdIsReached)
+    {
+        using namespace std::chrono_literals;
+
+        testing::NiceMock<PiSubmarine::Drv8908::IDeviceMock> chip;
+        TestPowerManager powerManager;
+        PrepareSuccessfulConfigurationDefaults(chip);
+
+        Unidirectional::Drv8908::Controller controller(
+            chip,
+            powerManager,
+            PiSubmarine::Drv8908::PwmGenerator::PwmGenerator2,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
+            Motor::Drv8908::BridgeSide::Low,
+            Motor::Drv8908::Config{
+                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .MinimalDuty = NormalizedFraction{0.20},
+                .KickDuration = 0ms,
+                .KickInterval = 0ms,
+                .KickDuty = NormalizedFraction{0.50},
+                .KickDutyCycleChangeRate = DutyRate{1, 1ms}});
+
+        ASSERT_TRUE(controller.SetPowered(true).has_value());
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.19}).has_value());
+
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
+            false,
+            false))
+            .Times(testing::AtLeast(1));
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
+            false,
+            true))
+            .Times(0);
+
+        controller.Tick(0ns, 10ms);
+
+        EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
+
+        testing::Mock::VerifyAndClearExpectations(&chip);
+
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.20}).has_value());
+
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
+            false,
+            true))
+            .Times(testing::AtLeast(1));
+
+        controller.Tick(10ms, 10ms);
+
+        EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.20);
+    }
+
     TEST(BidirectionalControllerTest, UsesConfiguredHalfBridgeMasksForForwardAndReverse)
     {
         using namespace std::chrono_literals;
@@ -253,6 +308,77 @@ namespace PiSubmarine::Motor::Drv8908
         ASSERT_TRUE(state.has_value());
         EXPECT_EQ(state->Direction, Telemetry::Api::DriveDirection::Reverse);
         EXPECT_DOUBLE_EQ(static_cast<double>(state->DriveEffort), 0.7);
+    }
+
+    TEST(BidirectionalControllerTest, CoastsBelowMinimalDutyAndRestoresDirectionWhenDriving)
+    {
+        using namespace std::chrono_literals;
+
+        testing::NiceMock<PiSubmarine::Drv8908::IDeviceMock> chip;
+        TestPowerManager powerManager;
+        PrepareSuccessfulConfigurationDefaults(chip);
+
+        Bidirectional::Drv8908::Controller controller(
+            chip,
+            powerManager,
+            PiSubmarine::Drv8908::PwmGenerator::PwmGenerator4,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+            Motor::Drv8908::Config{
+                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .MinimalDuty = NormalizedFraction{0.20},
+                .KickDuration = 0ms,
+                .KickInterval = 0ms,
+                .KickDuty = NormalizedFraction{0.50},
+                .KickDutyCycleChangeRate = DutyRate{1, 1ms}});
+
+        ASSERT_TRUE(controller.SetPowered(true).has_value());
+        ASSERT_TRUE(controller.SetDutyCycle(SignedNormalizedFraction{-0.19}).has_value());
+
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7 | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+            false,
+            false))
+            .Times(testing::AtLeast(1));
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
+            false,
+            true))
+            .Times(0);
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+            true,
+            false))
+            .Times(0);
+
+        controller.Tick(0ns, 10ms);
+
+        const auto coastState = controller.GetState();
+        ASSERT_TRUE(coastState.has_value());
+        EXPECT_EQ(coastState->Direction, Telemetry::Api::DriveDirection::Idle);
+        EXPECT_DOUBLE_EQ(static_cast<double>(coastState->DriveEffort), 0.0);
+
+        testing::Mock::VerifyAndClearExpectations(&chip);
+
+        ASSERT_TRUE(controller.SetDutyCycle(SignedNormalizedFraction{-0.20}).has_value());
+
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7,
+            false,
+            true))
+            .Times(testing::AtLeast(1));
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+            true,
+            false))
+            .Times(testing::AtLeast(1));
+
+        controller.Tick(10ms, 10ms);
+
+        const auto driveState = controller.GetState();
+        ASSERT_TRUE(driveState.has_value());
+        EXPECT_EQ(driveState->Direction, Telemetry::Api::DriveDirection::Reverse);
+        EXPECT_DOUBLE_EQ(static_cast<double>(driveState->DriveEffort), 0.20);
     }
 
     TEST(UnidirectionalControllerTest, RetriesPowerUpAfterSpiFailureOnNextTick)

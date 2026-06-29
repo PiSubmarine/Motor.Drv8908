@@ -66,8 +66,8 @@ namespace PiSubmarine::Motor::Drv8908
 
         PiSubmarine::Drv8908::PwmGenerator m_PwmGenerator;
         PiSubmarine::Drv8908::HalfBridgeBitMask m_HalfBridges;
-        PiSubmarine::Drv8908::HalfBridgeBitMask m_HighSideHalfBridges;
-        PiSubmarine::Drv8908::HalfBridgeBitMask m_LowSideHalfBridges;
+        PiSubmarine::Drv8908::HalfBridgeBitMask m_RequestedHighSideHalfBridges;
+        PiSubmarine::Drv8908::HalfBridgeBitMask m_RequestedLowSideHalfBridges;
         Config m_MotorConfig;
 
         ControlState m_State = ControlState::Normal;
@@ -87,6 +87,7 @@ namespace PiSubmarine::Motor::Drv8908
             DutyRate speed,
             std::chrono::nanoseconds deltaTime);
         [[nodiscard]] Error::Api::Result<void> SetDutyCycleInternal(NormalizedFraction dutyCycle);
-        [[nodiscard]] Error::Api::Result<void> ApplyHalfBridgeStates() const;
+        [[nodiscard]] bool ShouldDrive(NormalizedFraction dutyCycle) const;
+        [[nodiscard]] Error::Api::Result<void> ApplyHalfBridgeStates(NormalizedFraction dutyCycle) const;
     };
 }
