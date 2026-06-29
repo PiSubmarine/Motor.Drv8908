@@ -393,12 +393,14 @@ namespace PiSubmarine::Motor::Drv8908
             return MakeCommunicationError();
         }
 
-        // TODO Make configurable
+        // TODO AFAIK makes sense only for bi-directional motors
+        /*
         status = m_Chip.SetHalfBridgeActiveFreeWheeling(m_HalfBridges);
         if (!ValidateIcStatus(status).has_value())
         {
             return MakeCommunicationError();
         }
+        */
 
         m_KickNeeded = true;
         m_OperationalState = Telemetry::Api::OperationalState::Operational;
