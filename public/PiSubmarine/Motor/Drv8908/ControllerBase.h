@@ -1,7 +1,6 @@
 #pragma once
 
 #include <chrono>
-#include <stdexcept>
 
 #include "PiSubmarine/Drv8908/HalfBridgeBitMask.h"
 #include "PiSubmarine/Drv8908/IDevice.h"
@@ -52,8 +51,8 @@ namespace PiSubmarine::Motor::Drv8908
         void NoteTargetDutyCycleChange(NormalizedFraction oldDutyCycle, NormalizedFraction newDutyCycle);
         [[nodiscard]] bool BeginTick();
         void TickDriveEffort(NormalizedFraction targetDutyCycle, const std::chrono::nanoseconds& deltaTime);
-        void SetBridgeSide(BridgeSide bridgeSide);
-        void SetHalfBridgeStates(
+        [[nodiscard]] Error::Api::Result<void> SetBridgeSide(BridgeSide bridgeSide);
+        [[nodiscard]] Error::Api::Result<void> SetHalfBridgeStates(
             PiSubmarine::Drv8908::HalfBridgeBitMask highSideHalfBridgeMask,
             PiSubmarine::Drv8908::HalfBridgeBitMask lowSideHalfBridgeMask);
         [[nodiscard]] Error::Api::Result<Telemetry::Api::State> GetStateForDirection(
@@ -81,13 +80,13 @@ namespace PiSubmarine::Motor::Drv8908
         Telemetry::Api::Faults m_Faults{0};
         Telemetry::Api::Warnings m_Warnings{0};
 
-        void PowerUp();
-        void ReadStatus();
-        void TransitionDutyCycle(
+        [[nodiscard]] Error::Api::Result<void> PowerUp();
+        [[nodiscard]] Error::Api::Result<void> ReadStatus();
+        [[nodiscard]] Error::Api::Result<void> TransitionDutyCycle(
             NormalizedFraction targetDutyCycle,
             DutyRate speed,
             std::chrono::nanoseconds deltaTime);
-        void SetDutyCycleInternal(NormalizedFraction dutyCycle);
-        void ApplyHalfBridgeStates() const;
+        [[nodiscard]] Error::Api::Result<void> SetDutyCycleInternal(NormalizedFraction dutyCycle);
+        [[nodiscard]] Error::Api::Result<void> ApplyHalfBridgeStates() const;
     };
 }

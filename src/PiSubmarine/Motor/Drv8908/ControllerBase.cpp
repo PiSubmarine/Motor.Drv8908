@@ -1,14 +1,34 @@
 #include "PiSubmarine/Motor/Drv8908/ControllerBase.h"
 
-#include <cassert>
 #include <cmath>
 
+#include "PiSubmarine/Error/Api/MakeError.h"
 #include "PiSubmarine/RegUtils.h"
 
 namespace PiSubmarine::Motor::Drv8908
 {
     namespace
     {
+        [[nodiscard]] Error::Api::Result<void> MakeCommunicationError()
+        {
+            return std::unexpected(Error::Api::MakeError(Error::Api::ErrorCondition::CommunicationError));
+        }
+
+        [[nodiscard]] Error::Api::Result<void> MakeUnexpectedDeviceIdResult()
+        {
+            return std::unexpected(Error::Api::MakeError(Error::Api::ErrorCondition::DeviceError));
+        }
+
+        [[nodiscard]] Error::Api::Result<void> ValidateIcStatus(const PiSubmarine::Drv8908::IcStatus status)
+        {
+            if (!PiSubmarine::Drv8908::IsValid(status))
+            {
+                return MakeCommunicationError();
+            }
+
+            return {};
+        }
+
         Telemetry::Api::Warnings ConvertWarnings(PiSubmarine::Drv8908::IcStatus status)
         {
             using namespace RegUtils;
@@ -138,7 +158,20 @@ namespace PiSubmarine::Motor::Drv8908
         {
             if (m_WantsBePowered)
             {
-                PowerUp();
+                const auto powerUpResult = PowerUp();
+                if (!powerUpResult.has_value())
+                {
+                    m_OperationalState = powerUpResult.error().Condition == Error::Api::ErrorCondition::CommunicationError
+                        ? Telemetry::Api::OperationalState::Faulted
+                        : Telemetry::Api::OperationalState::Degraded;
+                    m_Faults = Telemetry::Api::Faults{0};
+                    m_Warnings = Telemetry::Api::Warnings{0};
+                    if (m_PowerLease.IsValid())
+                    {
+                        m_PowerManager.Release(m_PowerLease);
+                    }
+                    return false;
+                }
             }
             else if (m_CurrentDutyCycle == NormalizedFraction{0})
             {
@@ -148,9 +181,14 @@ namespace PiSubmarine::Motor::Drv8908
 
         if (m_PowerLease.IsValid())
         {
-            ReadStatus();
-            if (m_OperationalState == Telemetry::Api::OperationalState::Faulted)
+            const auto readStatusResult = ReadStatus();
+            if (!readStatusResult.has_value())
             {
+                m_OperationalState = readStatusResult.error().Condition == Error::Api::ErrorCondition::CommunicationError
+                    ? Telemetry::Api::OperationalState::Faulted
+                    : Telemetry::Api::OperationalState::Degraded;
+                m_Faults = Telemetry::Api::Faults{0};
+                m_Warnings = Telemetry::Api::Warnings{0};
                 return false;
             }
             return true;
@@ -176,7 +214,10 @@ namespace PiSubmarine::Motor::Drv8908
             {
                 transitionTarget = 0;
             }
-            TransitionDutyCycle(transitionTarget, m_MotorConfig.DutyCycleChangeRate, deltaTime);
+            if (!TransitionDutyCycle(transitionTarget, m_MotorConfig.DutyCycleChangeRate, deltaTime).has_value())
+            {
+                return;
+            }
 
             if (targetDutyCycle >= m_MotorConfig.MinimalDuty)
             {
@@ -192,7 +233,10 @@ namespace PiSubmarine::Motor::Drv8908
         }
         else if (m_State == ControlState::KickRise)
         {
-            TransitionDutyCycle(m_MotorConfig.KickDuty, m_MotorConfig.KickDutyCycleChangeRate, deltaTime);
+            if (!TransitionDutyCycle(m_MotorConfig.KickDuty, m_MotorConfig.KickDutyCycleChangeRate, deltaTime).has_value())
+            {
+                return;
+            }
 
             if (m_TimeSinceKickTransition >= m_MotorConfig.KickDuration / 2)
             {
@@ -209,7 +253,10 @@ namespace PiSubmarine::Motor::Drv8908
             }
             else
             {
-                TransitionDutyCycle(targetDutyCycle, m_MotorConfig.KickDutyCycleChangeRate, deltaTime);
+                if (!TransitionDutyCycle(targetDutyCycle, m_MotorConfig.KickDutyCycleChangeRate, deltaTime).has_value())
+                {
+                    return;
+                }
 
                 if (m_TimeSinceKickTransition >= m_MotorConfig.KickDuration / 2)
                 {
@@ -222,14 +269,14 @@ namespace PiSubmarine::Motor::Drv8908
         m_TimeSinceKickTransition += deltaTime;
     }
 
-    void ControllerBase::SetBridgeSide(const BridgeSide bridgeSide)
+    Error::Api::Result<void> ControllerBase::SetBridgeSide(const BridgeSide bridgeSide)
     {
-        SetHalfBridgeStates(
+        return SetHalfBridgeStates(
             bridgeSide == BridgeSide::High ? m_HalfBridges : PiSubmarine::Drv8908::HalfBridgeBitMask{0},
             bridgeSide == BridgeSide::Low ? m_HalfBridges : PiSubmarine::Drv8908::HalfBridgeBitMask{0});
     }
 
-    void ControllerBase::SetHalfBridgeStates(
+    Error::Api::Result<void> ControllerBase::SetHalfBridgeStates(
         const PiSubmarine::Drv8908::HalfBridgeBitMask highSideHalfBridgeMask,
         const PiSubmarine::Drv8908::HalfBridgeBitMask lowSideHalfBridgeMask)
     {
@@ -238,10 +285,10 @@ namespace PiSubmarine::Motor::Drv8908
 
         if (!m_PowerLease.IsValid())
         {
-            return;
+            return {};
         }
 
-        ApplyHalfBridgeStates();
+        return ApplyHalfBridgeStates();
     }
 
     Error::Api::Result<Telemetry::Api::State> ControllerBase::GetStateForDirection(
@@ -260,7 +307,7 @@ namespace PiSubmarine::Motor::Drv8908
         m_KickNeeded = true;
     }
 
-    void ControllerBase::PowerUp()
+    Error::Api::Result<void> ControllerBase::PowerUp()
     {
         using namespace RegUtils;
 
@@ -268,56 +315,94 @@ namespace PiSubmarine::Motor::Drv8908
 
         PiSubmarine::Drv8908::IcStatus icStat;
         auto status = m_Chip.GetStatus(icStat);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
 
         PiSubmarine::Drv8908::ConfigCtrl configCtrl{};
-        if (!PiSubmarine::Drv8908::IsValid(m_Chip.GetConfigCtrl(configCtrl)))
+        status = m_Chip.GetConfigCtrl(configCtrl);
+        if (!ValidateIcStatus(status).has_value())
         {
-            m_OperationalState = Telemetry::Api::OperationalState::Faulted;
-            return;
+            return MakeCommunicationError();
         }
 
         if (configCtrl.Id != PiSubmarine::Drv8908::IcId::DRV8908)
         {
-            throw std::runtime_error(
-                "Failed to initialize Thruster Drive: wrong device ID: " + std::to_string(ToInt(configCtrl.Id)) +
-                ", expected: " + std::to_string(ToInt(PiSubmarine::Drv8908::IcId::DRV8908)));
+            return MakeUnexpectedDeviceIdResult();
         }
 
         status = m_Chip.SetEnabledOpenLoadDetect(m_HalfBridges);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
         status = m_Chip.SetOpenLoadDetectControl3(PiSubmarine::Drv8908::OcpDeglitchTime::MicroSeconds60, true);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
         status = m_Chip.SetOpenLoadDetectControl2(
             PiSubmarine::Drv8908::OpenLoadDetectControl::OldRep | PiSubmarine::Drv8908::OpenLoadDetectControl::OldOp);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
         PiSubmarine::Drv8908::PwmGeneratorBitMask pwmGenerators;
         status = m_Chip.GetEnabledPwmGenerators(pwmGenerators);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
         pwmGenerators = pwmGenerators | PiSubmarine::Drv8908::ToPwmGeneratorBitMask(m_PwmGenerator);
         status = m_Chip.SetEnabledPwmGenerators(pwmGenerators);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
         status = m_Chip.SetPwmFrequency(m_PwmGenerator, PiSubmarine::Drv8908::PwmFrequency::Hz2000);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
         PiSubmarine::Drv8908::HalfBridgeBitMask pwmHalfBridges;
         status = m_Chip.GetHalfBridgePwmModes(pwmHalfBridges);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
         pwmHalfBridges = pwmHalfBridges | m_HalfBridges;
         status = m_Chip.SetHalfBridgePwmModes(pwmHalfBridges);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
 
-        ApplyHalfBridgeStates();
+        const auto applyHalfBridgeStatesResult = ApplyHalfBridgeStates();
+        if (!applyHalfBridgeStatesResult.has_value())
+        {
+            return applyHalfBridgeStatesResult;
+        }
 
         status = m_Chip.SetPwmMap(m_HalfBridges, m_PwmGenerator);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
 
+        // TODO Make configurable
         status = m_Chip.SetHalfBridgeActiveFreeWheeling(m_HalfBridges);
-        assert(IsValid(status));
+        if (!ValidateIcStatus(status).has_value())
+        {
+            return MakeCommunicationError();
+        }
 
         m_KickNeeded = true;
+        m_OperationalState = Telemetry::Api::OperationalState::Operational;
+        return {};
     }
 
-    void ControllerBase::ReadStatus()
+    Error::Api::Result<void> ControllerBase::ReadStatus()
     {
         PiSubmarine::Drv8908::IcStatus stat;
 
@@ -325,8 +410,7 @@ namespace PiSubmarine::Motor::Drv8908
         stat = m_Chip.GetStatus(chipStatus);
         if (!PiSubmarine::Drv8908::IsValid(stat))
         {
-            m_OperationalState = Telemetry::Api::OperationalState::Faulted;
-            return;
+            return MakeCommunicationError();
         }
         m_Faults = ConvertFaults(chipStatus);
         m_Warnings = ConvertWarnings(chipStatus);
@@ -335,18 +419,26 @@ namespace PiSubmarine::Motor::Drv8908
             m_OperationalState = Telemetry::Api::OperationalState::Degraded;
             PiSubmarine::Drv8908::ConfigCtrl configCtrl{};
             stat = m_Chip.GetConfigCtrl(configCtrl);
-            assert(PiSubmarine::Drv8908::IsValid(stat));
+            if (!PiSubmarine::Drv8908::IsValid(stat))
+            {
+                return MakeCommunicationError();
+            }
             configCtrl.ClrFlt = true;
             stat = m_Chip.SetConfigCtrl(configCtrl);
-            assert(PiSubmarine::Drv8908::IsValid(stat));
+            if (!PiSubmarine::Drv8908::IsValid(stat))
+            {
+                return MakeCommunicationError();
+            }
         }
         else
         {
             m_OperationalState = Telemetry::Api::OperationalState::Operational;
         }
+
+        return {};
     }
 
-    void ControllerBase::TransitionDutyCycle(
+    Error::Api::Result<void> ControllerBase::TransitionDutyCycle(
         const NormalizedFraction targetDutyCycle,
         DutyRate speed,
         const std::chrono::nanoseconds deltaTime)
@@ -360,29 +452,42 @@ namespace PiSubmarine::Motor::Drv8908
                 dutyDeltaTick = dutyDeltaCurrent;
             }
 
+            auto newDutyCycle = m_CurrentDutyCycle;
             if (m_CurrentDutyCycle < targetDutyCycle)
             {
-                m_CurrentDutyCycle = m_CurrentDutyCycle + dutyDeltaTick;
+                newDutyCycle = m_CurrentDutyCycle + dutyDeltaTick;
             }
             else if (m_CurrentDutyCycle > targetDutyCycle)
             {
-                m_CurrentDutyCycle = m_CurrentDutyCycle - dutyDeltaTick;
+                newDutyCycle = m_CurrentDutyCycle - dutyDeltaTick;
             }
 
-            SetDutyCycleInternal(m_CurrentDutyCycle);
+            return SetDutyCycleInternal(newDutyCycle);
         }
+
+        return {};
     }
 
-    void ControllerBase::SetDutyCycleInternal(const NormalizedFraction dutyCycle)
+    Error::Api::Result<void> ControllerBase::SetDutyCycleInternal(const NormalizedFraction dutyCycle)
     {
-        assert(m_PowerLease.IsValid());
-        m_CurrentDutyCycle = dutyCycle;
-        const NormalizedIntFraction<8> dutyCycleInt{static_cast<double>(m_CurrentDutyCycle)};
+        if (!m_PowerLease.IsValid())
+        {
+            return std::unexpected(Error::Api::MakeError(Error::Api::ErrorCondition::ContractError));
+        }
+
+        const NormalizedIntFraction<8> dutyCycleInt{static_cast<double>(dutyCycle)};
         const auto stat = m_Chip.SetDutyCycle(m_PwmGenerator, dutyCycleInt);
-        assert(PiSubmarine::Drv8908::IsValid(stat));
+        if (!PiSubmarine::Drv8908::IsValid(stat))
+        {
+            m_OperationalState = Telemetry::Api::OperationalState::Faulted;
+            return MakeCommunicationError();
+        }
+
+        m_CurrentDutyCycle = dutyCycle;
+        return {};
     }
 
-    void ControllerBase::ApplyHalfBridgeStates() const
+    Error::Api::Result<void> ControllerBase::ApplyHalfBridgeStates() const
     {
         using namespace RegUtils;
 
@@ -393,19 +498,30 @@ namespace PiSubmarine::Motor::Drv8908
         if (m_HighSideHalfBridges != PiSubmarine::Drv8908::HalfBridgeBitMask{0})
         {
             const auto status = m_Chip.SetHalfBridgeEnabled(m_HighSideHalfBridges, true, false);
-            assert(PiSubmarine::Drv8908::IsValid(status));
+            if (!PiSubmarine::Drv8908::IsValid(status))
+            {
+                return MakeCommunicationError();
+            }
         }
 
         if (m_LowSideHalfBridges != PiSubmarine::Drv8908::HalfBridgeBitMask{0})
         {
             const auto status = m_Chip.SetHalfBridgeEnabled(m_LowSideHalfBridges, false, true);
-            assert(PiSubmarine::Drv8908::IsValid(status));
+            if (!PiSubmarine::Drv8908::IsValid(status))
+            {
+                return MakeCommunicationError();
+            }
         }
 
         if (inactiveHalfBridges != PiSubmarine::Drv8908::HalfBridgeBitMask{0})
         {
             const auto status = m_Chip.SetHalfBridgeEnabled(inactiveHalfBridges, false, false);
-            assert(PiSubmarine::Drv8908::IsValid(status));
+            if (!PiSubmarine::Drv8908::IsValid(status))
+            {
+                return MakeCommunicationError();
+            }
         }
+
+        return {};
     }
 }

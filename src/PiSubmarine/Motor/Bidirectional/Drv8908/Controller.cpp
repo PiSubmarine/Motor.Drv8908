@@ -112,7 +112,10 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
                 }
                 else
                 {
-                    ApplyDirection(targetDirection);
+                    if (!ApplyDirection(targetDirection).has_value())
+                    {
+                        return;
+                    }
                 }
             }
             return;
@@ -120,7 +123,10 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
 
         if (m_CurrentDirection != targetDirection && targetDirection != Telemetry::Api::DriveDirection::Idle)
         {
-            ApplyDirection(targetDirection);
+            if (!ApplyDirection(targetDirection).has_value())
+            {
+                return;
+            }
         }
 
         TickDriveEffort(targetMagnitude, deltaTime);
@@ -159,18 +165,27 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
         return Telemetry::Api::DriveDirection::Idle;
     }
 
-    void Controller::ApplyDirection(const Telemetry::Api::DriveDirection direction)
+    Error::Api::Result<void> Controller::ApplyDirection(const Telemetry::Api::DriveDirection direction)
     {
         if (direction == Telemetry::Api::DriveDirection::Forward)
         {
-            SetHalfBridgeStates(m_ForwardHighSideHalfBridges, m_ForwardLowSideHalfBridges);
+            const auto result = SetHalfBridgeStates(m_ForwardHighSideHalfBridges, m_ForwardLowSideHalfBridges);
+            if (!result.has_value())
+            {
+                return result;
+            }
         }
         else if (direction == Telemetry::Api::DriveDirection::Reverse)
         {
-            SetHalfBridgeStates(m_ForwardLowSideHalfBridges, m_ForwardHighSideHalfBridges);
+            const auto result = SetHalfBridgeStates(m_ForwardLowSideHalfBridges, m_ForwardHighSideHalfBridges);
+            if (!result.has_value())
+            {
+                return result;
+            }
         }
 
         m_CurrentDirection = direction;
         RequestKick();
+        return {};
     }
 }

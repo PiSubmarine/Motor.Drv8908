@@ -1,6 +1,5 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <stdexcept>
 
 #include "PiSubmarine/Drv8908/IDriverMock.h"
 #include "PiSubmarine/Drv8908/IPowerManager.h"
@@ -254,5 +253,120 @@ namespace PiSubmarine::Motor::Drv8908
         ASSERT_TRUE(state.has_value());
         EXPECT_EQ(state->Direction, Telemetry::Api::DriveDirection::Reverse);
         EXPECT_DOUBLE_EQ(static_cast<double>(state->DriveEffort), 0.7);
+    }
+
+    TEST(UnidirectionalControllerTest, RetriesPowerUpAfterSpiFailureOnNextTick)
+    {
+        using namespace std::chrono_literals;
+
+        testing::NiceMock<PiSubmarine::Drv8908::IDeviceMock> chip;
+        TestPowerManager powerManager;
+        PrepareSuccessfulConfigurationDefaults(chip);
+
+        EXPECT_CALL(chip, GetStatus(testing::_))
+            .WillOnce([](PiSubmarine::Drv8908::IcStatus&)
+            {
+                return PiSubmarine::Drv8908::IcStatus{0};
+            })
+            .WillRepeatedly([](PiSubmarine::Drv8908::IcStatus& icStatus)
+            {
+                icStatus = static_cast<PiSubmarine::Drv8908::IcStatus>(0);
+                return ValidSpiStatus();
+            });
+
+        Unidirectional::Drv8908::Controller controller(
+            chip,
+            powerManager,
+            PiSubmarine::Drv8908::PwmGenerator::PwmGenerator1,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge1,
+            Motor::Drv8908::BridgeSide::High,
+            Motor::Drv8908::Config{
+                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .MinimalDuty = NormalizedFraction{0.20},
+                .KickDuration = 0ms,
+                .KickInterval = 0ms,
+                .KickDuty = NormalizedFraction{0.50},
+                .KickDutyCycleChangeRate = DutyRate{1, 1ms}});
+
+        ASSERT_TRUE(controller.SetPowered(true).has_value());
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.4}).has_value());
+
+        controller.Tick(0ns, 10ms);
+
+        EXPECT_FALSE(controller.IsActuallyPowered());
+        EXPECT_EQ(powerManager.AcquireCount, 1);
+        EXPECT_EQ(powerManager.ReleaseCount, 1);
+        const auto failedState = controller.GetState();
+        ASSERT_TRUE(failedState.has_value());
+        EXPECT_EQ(failedState->Operational, Telemetry::Api::OperationalState::Faulted);
+
+        controller.Tick(10ms, 10ms);
+
+        EXPECT_TRUE(controller.IsActuallyPowered());
+        EXPECT_EQ(powerManager.AcquireCount, 2);
+        EXPECT_EQ(powerManager.ReleaseCount, 1);
+    }
+
+    TEST(UnidirectionalControllerTest, DoesNotThrowAndRetriesAfterUnexpectedDeviceId)
+    {
+        using namespace std::chrono_literals;
+
+        testing::NiceMock<PiSubmarine::Drv8908::IDeviceMock> chip;
+        TestPowerManager powerManager;
+        PrepareSuccessfulConfigurationDefaults(chip);
+
+        EXPECT_CALL(chip, GetConfigCtrl(testing::_))
+            .WillOnce([](PiSubmarine::Drv8908::ConfigCtrl& configCtrl)
+            {
+                configCtrl = {
+                    .PoldEn = false,
+                    .Id = PiSubmarine::Drv8908::IcId::DRV8906,
+                    .OcpRep = false,
+                    .OtwRep = false,
+                    .ExtOvp = false,
+                    .ClrFlt = false
+                };
+                return ValidSpiStatus();
+            })
+            .WillRepeatedly([](PiSubmarine::Drv8908::ConfigCtrl& configCtrl)
+            {
+                configCtrl = {
+                    .PoldEn = false,
+                    .Id = PiSubmarine::Drv8908::IcId::DRV8908,
+                    .OcpRep = false,
+                    .OtwRep = false,
+                    .ExtOvp = false,
+                    .ClrFlt = false
+                };
+                return ValidSpiStatus();
+            });
+
+        Unidirectional::Drv8908::Controller controller(
+            chip,
+            powerManager,
+            PiSubmarine::Drv8908::PwmGenerator::PwmGenerator2,
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge2,
+            Motor::Drv8908::BridgeSide::High,
+            Motor::Drv8908::Config{
+                .DutyCycleChangeRate = DutyRate{1, 10ms},
+                .MinimalDuty = NormalizedFraction{0.20},
+                .KickDuration = 0ms,
+                .KickInterval = 0ms,
+                .KickDuty = NormalizedFraction{0.50},
+                .KickDutyCycleChangeRate = DutyRate{1, 1ms}});
+
+        ASSERT_TRUE(controller.SetPowered(true).has_value());
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.4}).has_value());
+
+        EXPECT_NO_THROW(controller.Tick(0ns, 10ms));
+        EXPECT_FALSE(controller.IsActuallyPowered());
+        EXPECT_EQ(powerManager.AcquireCount, 1);
+        EXPECT_EQ(powerManager.ReleaseCount, 1);
+
+        controller.Tick(10ms, 10ms);
+
+        EXPECT_TRUE(controller.IsActuallyPowered());
+        EXPECT_EQ(powerManager.AcquireCount, 2);
+        EXPECT_EQ(powerManager.ReleaseCount, 1);
     }
 }

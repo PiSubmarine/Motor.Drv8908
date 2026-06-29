@@ -50,6 +50,6 @@ namespace PiSubmarine::Motor::Bidirectional::Drv8908
 
         [[nodiscard]] static NormalizedFraction GetMagnitude(SignedNormalizedFraction dutyCycle);
         [[nodiscard]] static Telemetry::Api::DriveDirection GetDirection(SignedNormalizedFraction dutyCycle);
-        void ApplyDirection(Telemetry::Api::DriveDirection direction);
+        [[nodiscard]] Error::Api::Result<void> ApplyDirection(Telemetry::Api::DriveDirection direction);
     };
 }
