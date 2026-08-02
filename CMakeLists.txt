@@ -17,6 +17,6 @@ set(_build_cmake_local "${pisubmarinebuild_SOURCE_DIR}/PiSubmarine.Build.CMake.c
 
 include("${pisubmarinebuild_SOURCE_DIR}/PiSubmarine.Build.CMake.cmake")
 
-PiSubmarineInitModule("")
+PiSubmarineInitModule("PiSubmarine.Motor.Drv8908")
 project(${PISUBMARINE_MODULE_NAME})
 PiSubmarineConfigureModule()

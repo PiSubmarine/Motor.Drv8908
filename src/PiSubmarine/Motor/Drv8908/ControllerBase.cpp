@@ -9,6 +9,9 @@ namespace PiSubmarine::Motor::Drv8908
 {
     namespace
     {
+        constexpr auto BrakeRampDuration = std::chrono::milliseconds{250};
+        constexpr auto BrakeHoldDuration = std::chrono::milliseconds{250};
+
         [[nodiscard]] Error::Api::Result<void> MakeCommunicationError()
         {
             return std::unexpected(Error::Api::MakeError(Error::Api::ErrorCondition::CommunicationError));
@@ -99,7 +102,10 @@ namespace PiSubmarine::Motor::Drv8908
             RegUtils::ToInt(initialHighSideHalfBridgeMask) | RegUtils::ToInt(initialLowSideHalfBridgeMask))),
         m_RequestedHighSideHalfBridges(initialHighSideHalfBridgeMask),
         m_RequestedLowSideHalfBridges(initialLowSideHalfBridgeMask),
-        m_MotorConfig(motorConfig)
+        m_MotorConfig(motorConfig),
+        m_ActiveFreeWheelingEnabled(
+            initialHighSideHalfBridgeMask == PiSubmarine::Drv8908::HalfBridgeBitMask{0}
+            || initialLowSideHalfBridgeMask == PiSubmarine::Drv8908::HalfBridgeBitMask{0})
     {
     }
 
@@ -173,8 +179,16 @@ namespace PiSubmarine::Motor::Drv8908
                     return false;
                 }
             }
-            else if (m_CurrentDutyCycle == NormalizedFraction{0})
+            else if (
+                m_CurrentDutyCycle == NormalizedFraction{0}
+                && (!m_ActiveFreeWheelingEnabled || m_TimeAtZeroDuty >= BrakeHoldDuration))
             {
+                const auto status = m_Chip.SetHalfBridgeEnabled(m_HalfBridges, false, false);
+                if (!ValidateIcStatus(status).has_value())
+                {
+                    m_OperationalState = Telemetry::Api::OperationalState::Faulted;
+                    return false;
+                }
                 m_PowerManager.Release(m_PowerLease);
             }
         }
@@ -214,9 +228,16 @@ namespace PiSubmarine::Motor::Drv8908
             {
                 transitionTarget = 0;
             }
-            const auto transitionRate = transitionTarget >= m_CurrentDutyCycle
+            auto transitionRate = transitionTarget >= m_CurrentDutyCycle
                 ? m_MotorConfig.DutyCycleIncreaseChangeRate
                 : m_MotorConfig.DutyCycleDecreaseChangeRate;
+            if (
+                m_ActiveFreeWheelingEnabled
+                && transitionTarget == NormalizedFraction{0}
+                && transitionRate.DutyPerSecond <= 0.0)
+            {
+                transitionRate = DutyRate{1, BrakeRampDuration};
+            }
             if (!TransitionDutyCycle(transitionTarget, transitionRate, deltaTime).has_value())
             {
                 return;
@@ -267,6 +288,18 @@ namespace PiSubmarine::Motor::Drv8908
                     m_TimeSinceKickTransition = std::chrono::nanoseconds(0);
                 }
             }
+        }
+
+        if (
+            m_ActiveFreeWheelingEnabled
+            && targetDutyCycle == NormalizedFraction{0}
+            && m_CurrentDutyCycle == NormalizedFraction{0})
+        {
+            m_TimeAtZeroDuty += deltaTime;
+        }
+        else
+        {
+            m_TimeAtZeroDuty = std::chrono::nanoseconds{0};
         }
 
         m_TimeSinceKickTransition += deltaTime;
@@ -381,26 +414,26 @@ namespace PiSubmarine::Motor::Drv8908
             return MakeCommunicationError();
         }
 
-        const auto applyHalfBridgeStatesResult = ApplyHalfBridgeStates(m_CurrentDutyCycle);
-        if (!applyHalfBridgeStatesResult.has_value())
-        {
-            return applyHalfBridgeStatesResult;
-        }
-
         status = m_Chip.SetPwmMap(m_HalfBridges, m_PwmGenerator);
         if (!ValidateIcStatus(status).has_value())
         {
             return MakeCommunicationError();
         }
 
-        // TODO AFAIK makes sense only for bi-directional motors
-        /*
-        status = m_Chip.SetHalfBridgeActiveFreeWheeling(m_HalfBridges);
-        if (!ValidateIcStatus(status).has_value())
+        if (m_ActiveFreeWheelingEnabled)
         {
-            return MakeCommunicationError();
+            status = m_Chip.SetHalfBridgeActiveFreeWheeling(m_HalfBridges);
+            if (!ValidateIcStatus(status).has_value())
+            {
+                return MakeCommunicationError();
+            }
         }
-        */
+
+        const auto applyHalfBridgeStatesResult = ApplyHalfBridgeStates(m_CurrentDutyCycle);
+        if (!applyHalfBridgeStatesResult.has_value())
+        {
+            return applyHalfBridgeStatesResult;
+        }
 
         m_KickNeeded = true;
         m_OperationalState = Telemetry::Api::OperationalState::Operational;
@@ -512,10 +545,11 @@ namespace PiSubmarine::Motor::Drv8908
     {
         using namespace RegUtils;
 
-        const auto highSideHalfBridges = ShouldDrive(dutyCycle)
+        const auto keepBridgeEnabled = m_ActiveFreeWheelingEnabled || ShouldDrive(dutyCycle);
+        const auto highSideHalfBridges = keepBridgeEnabled
             ? m_RequestedHighSideHalfBridges
             : PiSubmarine::Drv8908::HalfBridgeBitMask{0};
-        const auto lowSideHalfBridges = ShouldDrive(dutyCycle)
+        const auto lowSideHalfBridges = keepBridgeEnabled
             ? m_RequestedLowSideHalfBridges
             : PiSubmarine::Drv8908::HalfBridgeBitMask{0};
 

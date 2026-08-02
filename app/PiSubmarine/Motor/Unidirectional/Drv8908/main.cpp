@@ -29,13 +29,13 @@ struct magic_enum::customize::enum_range<PiSubmarine::Motor::Telemetry::Api::War
 
 void IncreaseDuty(PiSubmarine::Motor::Unidirectional::Api::IController& controller)
 {
-    double dutyCycle = std::min(1.0, controller.GetDutyCycle().value() + 0.05);
+    double dutyCycle = std::min(1.0, controller.GetDutyCycle().value() + 0.25);
     controller.SetDutyCycle(dutyCycle);
 }
 
 void DecreaseDuty(PiSubmarine::Motor::Unidirectional::Api::IController& controller)
 {
-    double dutyCycle = std::max(0.0, controller.GetDutyCycle().value() - 0.05);
+    double dutyCycle = std::max(0.0, controller.GetDutyCycle().value() - 0.25);
     controller.SetDutyCycle(dutyCycle);
 }
 
@@ -62,17 +62,19 @@ int main()
     PiSubmarine::Drv8908::PowerManager thrusterChipPowerManager(thrusterChip);
 
     PiSubmarine::Motor::Drv8908::Config motorConfig;
-    motorConfig.DutyCycleIncreaseChangeRate = PiSubmarine::Motor::DutyRate(1, 1s);
-    motorConfig.DutyCycleDecreaseChangeRate = PiSubmarine::Motor::DutyRate(1, 1s);
+    motorConfig.DutyCycleIncreaseChangeRate = PiSubmarine::Motor::DutyRate(1, 250ms);
+    motorConfig.DutyCycleDecreaseChangeRate = PiSubmarine::Motor::DutyRate(1, 250ms);
+    motorConfig.KickDutyCycleChangeRate = PiSubmarine::Motor::DutyRate(1, 250ms);
 
     // Motor 1
     PiSubmarine::Motor::Unidirectional::Drv8908::Controller thrusterFrontRight(
         thrusterChip,
         thrusterChipPowerManager,
         PiSubmarine::Drv8908::PwmGenerator::PwmGenerator1,
-        PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3 | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge4,
+        PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge1 | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge2,
         PiSubmarine::Motor::Drv8908::BridgeSide::High,
         motorConfig);
+    thrusterFrontRight.SetPowered(true);
 
     // Motor 2
     PiSubmarine::Motor::Unidirectional::Drv8908::Controller thrusterBackRight(

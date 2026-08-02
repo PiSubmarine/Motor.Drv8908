@@ -85,6 +85,8 @@ namespace PiSubmarine::Motor::Drv8908
                 });
             ON_CALL(chip, SetHalfBridgePwmModes(testing::_))
                 .WillByDefault(testing::Return(ValidSpiStatus()));
+            ON_CALL(chip, SetHalfBridgeActiveFreeWheeling(testing::_))
+                .WillByDefault(testing::Return(ValidSpiStatus()));
             ON_CALL(chip, SetHalfBridgeEnabled(testing::A<PiSubmarine::Drv8908::HalfBridgeBitMask>(), testing::_, testing::_))
                 .WillByDefault(testing::Return(ValidSpiStatus()));
             ON_CALL(chip, SetPwmMap(testing::A<PiSubmarine::Drv8908::HalfBridgeBitMask>(), testing::A<PiSubmarine::Drv8908::PwmGenerator>()))
@@ -119,6 +121,20 @@ namespace PiSubmarine::Motor::Drv8908
 
         ASSERT_TRUE(controller.SetPowered(true).has_value());
         ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.6}).has_value());
+
+        EXPECT_CALL(
+            chip,
+            SetOpenLoadDetectControl3(PiSubmarine::Drv8908::OcpDeglitchTime::MicroSeconds60, true));
+        EXPECT_CALL(
+            chip,
+            SetPwmFrequency(
+                PiSubmarine::Drv8908::PwmGenerator::PwmGenerator1,
+                PiSubmarine::Drv8908::PwmFrequency::Hz2000));
+        EXPECT_CALL(
+            chip,
+            SetHalfBridgeActiveFreeWheeling(
+                PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge1
+                | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge2));
 
         controller.Tick(0ns, 10ms);
 
@@ -158,14 +174,22 @@ namespace PiSubmarine::Motor::Drv8908
 
         ASSERT_TRUE(controller.SetPowered(false).has_value());
         controller.Tick(10ms, 10ms);
-        controller.Tick(20ms, 10ms);
+
+        for (auto tick = 2; tick <= 25; ++tick)
+        {
+            controller.Tick(tick * 10ms, 10ms);
+        }
+
+        EXPECT_EQ(powerManager.ReleaseCount, 0);
+
+        controller.Tick(260ms, 10ms);
 
         EXPECT_EQ(powerManager.AcquireCount, 1);
         EXPECT_GE(powerManager.ReleaseCount, 1);
         EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
     }
 
-    TEST(UnidirectionalControllerTest, UsesInstantDecreaseByDefault)
+    TEST(UnidirectionalControllerTest, UsesSafeStopRampWhenConfiguredDecreaseIsUnlimited)
     {
         using namespace std::chrono_literals;
 
@@ -194,10 +218,10 @@ namespace PiSubmarine::Motor::Drv8908
         ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.0}).has_value());
         controller.Tick(10ms, 1ms);
 
-        EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
+        EXPECT_NEAR(static_cast<double>(controller.GetActualDutyCycle().value()), 0.396, 1e-9);
     }
 
-    TEST(UnidirectionalControllerTest, CoastsBelowMinimalDutyUntilDriveThresholdIsReached)
+    TEST(UnidirectionalControllerTest, KeepsBridgeEnabledBelowMinimalDutyForActiveFreewheeling)
     {
         using namespace std::chrono_literals;
 
@@ -227,12 +251,12 @@ namespace PiSubmarine::Motor::Drv8908
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
             false,
             false))
-            .Times(testing::AtLeast(1));
+            .Times(0);
         EXPECT_CALL(chip, SetHalfBridgeEnabled(
             PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge3,
             false,
             true))
-            .Times(0);
+            .Times(testing::AtLeast(1));
 
         controller.Tick(0ns, 10ms);
 
@@ -251,6 +275,50 @@ namespace PiSubmarine::Motor::Drv8908
         controller.Tick(10ms, 10ms);
 
         EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.20);
+    }
+
+    TEST(UnidirectionalControllerTest, KeepsHighSidePwmEnabledAtZeroDutyForLowSideBraking)
+    {
+        using namespace std::chrono_literals;
+
+        testing::NiceMock<PiSubmarine::Drv8908::IDeviceMock> chip;
+        TestPowerManager powerManager;
+        PrepareSuccessfulConfigurationDefaults(chip);
+
+        constexpr auto halfBridges =
+            PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge1
+            | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge2;
+        Unidirectional::Drv8908::Controller controller(
+            chip,
+            powerManager,
+            PiSubmarine::Drv8908::PwmGenerator::PwmGenerator1,
+            halfBridges,
+            Motor::Drv8908::BridgeSide::High,
+            Motor::Drv8908::Config{
+                .DutyCycleIncreaseChangeRate = DutyRate{1, 10ms},
+                .DutyCycleDecreaseChangeRate = DutyRate{1, 10ms},
+                .MinimalDuty = NormalizedFraction{0.20},
+                .KickDuration = 0ms,
+                .KickInterval = 0ms,
+                .KickDuty = NormalizedFraction{0.50},
+                .KickDutyCycleChangeRate = DutyRate{1, 1ms}});
+
+        ASSERT_TRUE(controller.SetPowered(true).has_value());
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0.4}).has_value());
+        controller.Tick(0ns, 10ms);
+
+        testing::Mock::VerifyAndClearExpectations(&chip);
+
+        ASSERT_TRUE(controller.SetDutyCycle(NormalizedFraction{0}).has_value());
+
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(halfBridges, true, false))
+            .Times(testing::AtLeast(1));
+        EXPECT_CALL(chip, SetHalfBridgeEnabled(halfBridges, false, false))
+            .Times(0);
+
+        controller.Tick(10ms, 10ms);
+
+        EXPECT_DOUBLE_EQ(static_cast<double>(controller.GetActualDutyCycle().value()), 0.0);
     }
 
     TEST(BidirectionalControllerTest, UsesConfiguredHalfBridgeMasksForForwardAndReverse)
@@ -278,6 +346,16 @@ namespace PiSubmarine::Motor::Drv8908
 
         ASSERT_TRUE(controller.SetPowered(true).has_value());
         ASSERT_TRUE(controller.SetDutyCycle(SignedNormalizedFraction{0.3}).has_value());
+
+        EXPECT_CALL(chip, SetHalfBridgeActiveFreeWheeling(testing::_)).Times(0);
+        EXPECT_CALL(
+            chip,
+            SetHalfBridgeEnabled(
+                PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge7
+                    | PiSubmarine::Drv8908::HalfBridgeBitMask::HalfBridge8,
+                false,
+                false))
+            .Times(testing::AtLeast(1));
 
         EXPECT_CALL(
             chip,

@@ -72,6 +72,8 @@ namespace PiSubmarine::Motor::Drv8908
 
         ControlState m_State = ControlState::Normal;
         std::chrono::nanoseconds m_TimeSinceKickTransition{};
+        std::chrono::nanoseconds m_TimeAtZeroDuty{};
+        bool m_ActiveFreeWheelingEnabled = false;
         bool m_WantsBePowered = false;
         bool m_KickNeeded = true;
         NormalizedFraction m_CurrentDutyCycle{0};

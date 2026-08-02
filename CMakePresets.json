@@ -76,14 +76,14 @@
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "/home/pisubmarine/vcpkg/scripts/buildsystems/vcpkg.cmake"
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
           "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
         },
         "jetbrains.com/clion": {
-          "toolchain": "PiSubmarine"
+          "toolchain": "Raspberry 5 Remote Build"
         }
       }
     },
